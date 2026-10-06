@@ -9,7 +9,7 @@ project(relational_engine_ide LANGUAGES C)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(VEXSPOKE_SOURCE_DIR "" CACHE PATH "Optional local Vexspoke src for C reference headers")
-foreach(part io relational reflection)
+foreach(part nio io relational reflection)
     file(GLOB part_sources CONFIGURE_DEPENDS "src/${part}/*.c" "src/${part}/*.h")
     add_library(reference_${part} OBJECT EXCLUDE_FROM_ALL ${part_sources})
     set_target_properties(reference_${part} PROPERTIES C_STANDARD 23 C_STANDARD_REQUIRED YES C_EXTENSIONS YES)
