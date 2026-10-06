@@ -1,0 +1,10 @@
+[package]
+name = "relational-engine-scratchpad"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "MIT"
+description = "Unimplemented Rust interpretation of the relational storage manager"
+
+[lib]
+path = "src/lib.rs"
