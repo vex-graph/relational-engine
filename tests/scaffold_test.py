@@ -14,7 +14,7 @@ def run(*args, **kwargs):
 
 
 def main():
-    parts = ("io", "reflection", "relational")
+    parts = ("nio", "io", "reflection", "relational")
     for part in parts:
         assert (ROOT / "src" / part).is_dir()
         assert not (ROOT / part).exists()
