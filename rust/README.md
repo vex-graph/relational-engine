@@ -20,7 +20,10 @@ single import above provides both. `bytes!` borrows bytes without allocation;
 one owner. Independent owners have independent ID spaces. Rust borrows prevent
 mutation during a read. C callers must obey the header's lifetime contract.
 
-Run `python3 tests/rust/run.py` from the repository root. It runs the registered
+From the workspace root, run `python3 tests/relational-engine/rust/run.py`.
+The independent shared suite has its own Cargo manifest; production Cargo
+builds do not require the tests checkout. Running the owner suite does.
+It runs the registered
 Cargo tests, builds a static library and executes an actual warnings-denied C23
 client, in debug and release, with a borrow-checker compile-negative case and
 C-client ASan/UBSan. Rust internals are not sanitizer-instrumented by that C run.
