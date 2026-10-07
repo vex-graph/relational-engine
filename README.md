@@ -9,7 +9,7 @@ memory engine that self describes and has coexistence
 - `rust/`: Cargo-recognized Rust scratchpad for the future storage manager.
   A learning backend now owns byte blocks and exposes a standalone C copy ABI;
   it is not the Vexspoke allocator or a production storage manager.
-- `tests/`: standalone tooling checks, separate from production source.
+- Owner and tooling tests live in the independent workspace `tests/relational-engine/`.
 
 The imported C reference retains Vexspoke's Boost Software License in
 `src/LICENSE`; the repository's original MIT license remains at the root.
@@ -17,7 +17,8 @@ The imported C reference retains Vexspoke's Boost Software License in
 The intended production boundary is Rust-owned allocation/chunk lifetime with
 native C processing over explicitly borrowed spans. This learning implementation
 uses copy-in/copy-out instead; a zero-copy production boundary remains proposed.
-See `rust/README.md` and run `python3 tests/rust/run.py` for the owner/ABI suite.
+See `rust/README.md` and run `python3 tests/relational-engine/rust/run.py`
+from the workspace root for the owner/ABI suite.
 
 ## CLion: CMake is IDE metadata only
 
@@ -49,7 +50,8 @@ or prove the engine. No b configuration selects the CMake adapter.
 
 ## Verification and known gaps
 
-Run `python3 tests/scaffold_test.py` for layout, mixed-ignore behavior,
+From the workspace root, run `python3 tests/relational-engine/scaffold_test.py`
+for layout, mixed-ignore behavior,
 CMake metadata generation and a warnings-denied Cargo scaffold check.
 These are tooling checks, not behavioral proof for the imported C classes.
 The separate Rust suite exercises byte ownership and its standalone C copy ABI.
