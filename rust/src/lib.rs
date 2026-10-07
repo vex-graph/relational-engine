@@ -8,11 +8,17 @@
 //! # Ok::<(), relational_engine_scratchpad::MemoryError>(())
 //! ```
 pub mod nio;
+pub mod primitives;
+pub mod io;
+pub mod compress;
+pub mod variable;
+pub mod r#struct;
+pub mod r#virtual;
 pub mod text;
 pub mod ffi;
 // Preserve existing short client paths while exposing organized modules.
 pub use nio::mem;
-pub use text::string;
+pub use primitives::string;
 pub use nio::mem::Memory;
 pub use nio::memory_error::MemoryError;
 
