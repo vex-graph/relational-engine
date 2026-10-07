@@ -3,6 +3,15 @@ memory engine that self describes and has coexistence
 
 ## Starting point: two interpretations
 
+Relational-engine is an **R2 storage backend alongside Vexspoke**, not a host or
+graphics driver. Rust modules separate `nio`, `io`, `primitives`, `variable`,
+`struct`, `compress`, and `virtual`; only existing memory/string/FFI operations
+are implemented. mmap belongs in `nio`; FFF-style file gathering/indexing belongs
+in `io`. Graphics compute (GPU shaders/dispatch) remains Graphvex-owned.
+C `src/search/primitives/` reserves the native search boundary; it has no runtime
+implementation yet. Imported C reference files below remain intact.
+
+
 - `src/`: preserved C23 reference/scratchpad, imported from Vexspoke.
   `io/`, `relational/`, and `reflection/` are comparison material, not a claim
   that every imported utility belongs in the final storage engine.
