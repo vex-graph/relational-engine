@@ -8,7 +8,7 @@
 //! Rejection preserves content. Kind tags are internal, NOT ecosystem type IDs.
 //! Atomic Bytes publish with release/acquire. Strings retain immutable snapshots.
 use std::sync::atomic::{AtomicU8, Ordering};
-use crate::text::atomic_string::AtomicString;
+use crate::primitives::atomic_string::AtomicString;
 pub use super::memory_error::MemoryError;
 use super::{block::Block, value::Value};
 
