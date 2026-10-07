@@ -1,4 +1,4 @@
-//! DEFINITION: atomic publication of immutable byte-string snapshots.
+//! DEFINITION: primitive atomic publication of immutable byte-string snapshots.
 //! Readers acquire one pointer and borrow a whole snapshot without a lock.
 //! OVERVIEW: AtomicString { current: AtomicPtr<Snapshot>, history: Mutex<History>,
 //! retention_limit: usize }. Private helpers live in snapshot.rs and history.rs.
