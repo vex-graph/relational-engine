@@ -2,7 +2,7 @@
 //!
 //! ```
 //! use relational_engine_scratchpad::{Memory, bytes};
-//! let mut memory = Memory::new();
+//! let mut memory = Memory!();
 //! let hello = memory.copy_bytes(bytes!("hello"))?;
 //! assert_eq!(memory.get(hello)?, b"hello");
 //! # Ok::<(), relational_engine_scratchpad::MemoryError>(())
@@ -12,9 +12,9 @@ pub mod string;
 pub mod ffi;
 pub use mem::{Memory, MemoryError};
 
-/// Constructor convenience; Rust does not support associated `new!` macros.
+/// Canonical constructor convenience, sharing the type's name in the macro namespace.
 #[macro_export]
-macro_rules! memory_new {
+macro_rules! Memory {
     () => { $crate::Memory::new() };
 }
 
