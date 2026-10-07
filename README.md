@@ -7,15 +7,17 @@ memory engine that self describes and has coexistence
   `io/`, `relational/`, and `reflection/` are comparison material, not a claim
   that every imported utility belongs in the final storage engine.
 - `rust/`: Cargo-recognized Rust scratchpad for the future storage manager.
-  No allocator, storage API, ABI or translated classes are implemented yet.
+  A learning backend now owns byte blocks and exposes a standalone C copy ABI;
+  it is not the Vexspoke allocator or a production storage manager.
 - `tests/`: standalone tooling checks, separate from production source.
 
 The imported C reference retains Vexspoke's Boost Software License in
 `src/LICENSE`; the repository's original MIT license remains at the root.
 
-The intended boundary is Rust-owned allocation/chunk lifetime with native C
-processing over explicitly borrowed pointers/spans. That boundary is proposed,
-not implemented. Get/set need not cross FFI per element.
+The intended production boundary is Rust-owned allocation/chunk lifetime with
+native C processing over explicitly borrowed spans. This learning implementation
+uses copy-in/copy-out instead; a zero-copy production boundary remains proposed.
+See `rust/README.md` and run `python3 tests/rust/run.py` for the owner/ABI suite.
 
 ## CLion: CMake is IDE metadata only
 
@@ -42,7 +44,7 @@ standalone b installation:
 b build cargo rust
 ```
 
-That builds only the empty Rust scaffold. It does not build the C reference
+That builds only the Rust learning backend. It does not build the C reference
 or prove the engine. No b configuration selects the CMake adapter.
 
 ## Verification and known gaps
@@ -50,7 +52,8 @@ or prove the engine. No b configuration selects the CMake adapter.
 Run `python3 tests/scaffold_test.py` for layout, mixed-ignore behavior,
 CMake metadata generation and a warnings-denied Cargo scaffold check.
 These are tooling checks, not behavioral proof for the imported C classes.
-Engine tests, C dependency closure, C/Rust equivalence, cross-language ABI,
+The separate Rust suite exercises byte ownership and its standalone C copy ABI.
+C dependency closure, C/Rust allocator equivalence, zero-copy borrowing,
 concurrency, performance and Windows execution remain unproved.
 
 Universal architecture and proof follow the linked constitution in
