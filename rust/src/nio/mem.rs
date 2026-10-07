@@ -1,4 +1,4 @@
-//! DEFINITION: Memory owns byte blocks; C does not own their allocations.
+//! DEFINITION: nio/mem owns byte blocks; C does not own their allocations.
 //! This cold, single-owner teaching backend uses the Rust heap, not slabs.
 //! OVERVIEW: Memory { blocks: Vec<Block>, next_id: u64 }.
 //! Private Block { id: u64, bytes: Box<[u8]> }; identity is never reused.
