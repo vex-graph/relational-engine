@@ -1,4 +1,4 @@
-//! Private string retention ledger. Owned snapshots stay alive until destruction.
+//! Private primitive string retention ledger. Snapshots live until destruction.
 use super::snapshot::Snapshot;
 
 pub(super) struct History {
