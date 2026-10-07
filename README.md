@@ -54,10 +54,14 @@ From the workspace root, run `python3 tests/relational-engine/scaffold_test.py`
 for layout, mixed-ignore behavior,
 CMake metadata generation and a warnings-denied Cargo scaffold check.
 These are tooling checks, not behavioral proof for the imported C classes.
-The separate Rust suite exercises byte ownership and its standalone C copy ABI.
+The separate Rust suite exercises byte ownership, atomic byte/string publication
+and an opt-in Vexspoke extern handshake through the standalone C ABI.
 C dependency closure, C/Rust allocator equivalence, zero-copy borrowing,
-concurrency, performance and Windows execution remain unproved.
+complete concurrency/fault coverage, performance, automatic record schema
+migration, live Hotcwap reload integration and Windows execution remain unproved.
 
 Universal architecture and proof follow the linked constitution in
-`CONTRIBUTING.md`. A repository-local lawbook is currently missing; this
-initial publication does not amend ecosystem memory ownership.
+`CONTRIBUTING.md` and `relational-engine-preferences.md`. The engine remains an
+optional backend, not a replacement for Vexspoke's current allocator. Engine
+code/storage remain resident across consumer reloads; value replacement is not
+automatic record schema migration.
