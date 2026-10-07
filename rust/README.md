@@ -1,16 +1,36 @@
 # Rust interpretation
 
 This package implements a small learning backend, not a port of Vexspoke's
-allocator. `src/nio/mem.rs` owns heap-backed byte blocks, `src/text/string.rs`
+allocator. `src/nio/mem.rs` owns heap-backed byte blocks, `src/primitives/string.rs`
 projects UTF-8 Bytes, and `src/ffi/memory.rs` exposes an opaque C owner with
 copy-in/copy-out operations. Each directory's `mod.rs` declares its Rust module.
 No block pointer escapes to C. Single-owner calls require external exclusion.
 
-The public module paths are `nio::mem`, `text::string`, and `ffi::memory`.
+The public module paths are `nio::mem`, `primitives::string`, and `ffi::memory`.
+`text::string` and `text::atomic_string` remain compatibility re-exports.
 Each named type has its own file: `nio/mem.rs` contains just `Memory` and its
 methods; `nio/memory_error.rs` contains `MemoryError`. Private Block, Value,
 Snapshot and History records/enums also live in individual files. `pub fn`
 means a method is callable; it does not declare another class.
+
+## Responsibility layout (R2)
+
+Relational-engine is an R2 backend alongside Vexspoke. Existing memory/string/FFI
+code is implemented; the following reserved modules document future scope only:
+
+- `src/nio/`: memory/buffers; mmap and foreign storage are not implemented yet.
+- `src/io/`: file gathering/access, FFF-style indexing/search and watching (planned).
+- `src/primitives/`: implemented byte-backed string projection and atomic snapshots.
+- `src/variable/`: named/typed bindings (planned).
+- `src/struct/`: flat collections/records (planned; Rust path `r#struct`).
+- `src/compress/`: ZIP, 7z and ASTC codecs (planned, no transparent RAM compression).
+- `src/virtual/`: GPU-storage/transfer contracts (planned; Rust path `r#virtual`).
+- `src/ffi/`: implemented opaque-owner C ABI.
+
+Graphics-compute shaders and execution belong to Graphvex. No GPU driver is added
+to this crate. C primitive-span search will live in `../src/search/primitives/`;
+that directory has no runtime search implementation yet. The upstream FFF toolkit
+is https://github.com/dmtrKovalenko/fff, not an on-disk format.
 Root `Memory`, `Memory!()`, `mem`, `string`, and `ffi::re_memory_*` remain
 available for existing clients. Shared tests mirror these module directories.
 Constructor macros are CamelCase: `Memory!()` and `Bytes!()`. Lowercase
