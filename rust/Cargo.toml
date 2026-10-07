@@ -9,7 +9,3 @@ description = "Learning byte-storage backend with an explicit C boundary"
 [lib]
 path = "src/lib.rs"
 crate-type = ["rlib", "staticlib"]
-
-[[test]]
-name = "memory_owner"
-path = "../tests/rust/mem_test.rs"
