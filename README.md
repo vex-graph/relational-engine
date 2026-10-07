@@ -35,7 +35,8 @@ Rust analysis requires CLion's Rust support and `rust/Cargo.toml`; CMake
 does not provide Rust semantic analysis. Open/attach that Cargo package if
 the IDE does not discover it automatically. IDE appearance is user-verified.
 
-The actual build entry remains `b`; with a standalone b installation:
+The actual build entry remains [b](https://github.com/vex-graph/b); with a
+standalone b installation:
 
 ```sh
 b build cargo rust
