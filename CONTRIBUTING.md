@@ -13,5 +13,6 @@ CMake is CLion-only metadata. Use b/native compiler tooling for actual work;
 do not make the runtime depend on CMake or compile out real diagnostics.
 
 The repo-local lawbook is an explicit reading gap at this scaffold stage.
-Public scratchpad code is not battle-tested readiness. Tests live in top-level
-`tests/`; generated binaries, Cargo target output and IDE state stay ignored.
+Public scratchpad code is not battle-tested readiness. Owner tests live in the
+independent workspace `tests/relational-engine/` checkout; generated binaries,
+Cargo target output and IDE state stay ignored.
