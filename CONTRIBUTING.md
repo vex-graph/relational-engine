@@ -12,7 +12,8 @@ reference code until its replacement has an explicit contract and proof.
 CMake is CLion-only metadata. Use b/native compiler tooling for actual work;
 do not make the runtime depend on CMake or compile out real diagnostics.
 
-The repo-local lawbook is an explicit reading gap at this scaffold stage.
+Read [relational-engine-preferences.md](relational-engine-preferences.md) for
+the resident storage, atomic boundary and one-type-per-file contracts.
 Public scratchpad code is not battle-tested readiness. Owner tests live in the
 independent workspace `tests/relational-engine/` checkout; generated binaries,
 Cargo target output and IDE state stay ignored.
