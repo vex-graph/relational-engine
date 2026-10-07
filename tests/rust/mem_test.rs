@@ -1,8 +1,8 @@
-use relational_engine_scratchpad::{bytes, memory_new, Memory, MemoryError, string, ffi::*};
+use relational_engine_scratchpad::{bytes, Memory, MemoryError, string, ffi::*};
 
 #[test]
 fn memory_lifetime_growth_and_rejection() {
-    let mut memory = memory_new!();
+    let mut memory: Memory = Memory!();
     assert!(memory.is_empty());
     assert!(Memory::default().is_empty());
     let id = memory.copy_bytes(bytes!("hello 🌍")).unwrap();
