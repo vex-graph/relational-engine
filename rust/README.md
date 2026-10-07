@@ -7,14 +7,15 @@ No block pointer escapes to C. Single-owner calls require external exclusion.
 
 ```rust
 use relational_engine_scratchpad::{Memory, bytes};
-let mut memory = Memory::new();
+let mut memory = Memory!();
 let hello = memory.copy_bytes(bytes!("hello"))?;
 assert_eq!(memory.get(hello)?, b"hello");
 # Ok::<(), relational_engine_scratchpad::MemoryError>(())
 ```
 
-`memory_new!()` is optional constructor sugar; `Memory::new!()` is not legal
-associated-macro syntax in Rust. `bytes!` borrows bytes without allocation;
+`Memory!()` is the constructor macro; `Memory::new()` remains its underlying
+method. The type and macro share a name in separate Rust namespaces, so the
+single import above provides both. `bytes!` borrows bytes without allocation;
 `copy_bytes` owns a copy. Release/clear invalidate IDs; IDs never repeat within
 one owner. Independent owners have independent ID spaces. Rust borrows prevent
 mutation during a read. C callers must obey the header's lifetime contract.
