@@ -15,6 +15,31 @@ Read it first, then this file, `../../tests/test-preferences.md`, current
 | Cross-Language Atomic Access Law | Shared primitive values and strings | Typed atomic operations, snapshot/concurrency tests |
 | One Rust Class Per File Law | Rust declarations | One struct/class or enum per implementation file, including private helpers |
 | CamelCase Rust Constructor Macro Law | Rust construction spelling | CamelCase!() macros; snake_case ordinary operations |
+| R2 Responsibility Layout Law | Rust storage and C search | Module/layout owner checks; explicit unimplemented scope |
+
+### R2 Responsibility Layout Law
+
+Relational-engine is an R2 storage backend alongside Vexspoke, not R1 and not
+a GPU driver. Vexspoke may consume its opt-in C ABI; default allocation is unchanged.
+Rust `nio/` owns buffers, heap/foreign storage and future file-backed mappings
+(`MappedFile`/mmap); `io/` owns file access, gathering, indexing and watching.
+FFF means the file-search toolkit at https://github.com/dmtrKovalenko/fff,
+not a new file format; our equivalent remains future work.
+Rust `primitives/` owns byte/number/string values; `variable/` owns named bindings;
+`struct/` owns collections and relational records. `compress/` is explicit codec
+work (ZIP/7z archives, ASTC textures), never transparent active-RAM compression.
+`virtual/` is reserved for GPU-storage references and transfer contracts.
+Rust paths for reserved words use `r#struct` and `r#virtual`.
+Graphics compute means GPU shaders and their execution; its implementations live
+in Graphvex, including dispatch, capabilities and synchronization. No engine
+`compute/` implementation duplicates that owner. CPU atomic publication does not
+prove GPU completion or shared-memory accessibility.
+
+C `src/search/primitives/` is reserved for native primitive-span search over
+Rust-owned bytes; imported C reference directories are not relocated or promoted
+to production by this organization. These new areas have no runtime API until
+implementation and registered owner proof exist. Preserve legacy `text` and root
+Rust aliases while moving existing string implementation to `primitives/`.
 
 ### CamelCase Rust Constructor Macro Law
 
