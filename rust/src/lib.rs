@@ -21,6 +21,11 @@ pub use nio::mem;
 pub use primitives::string;
 pub use nio::mem::Memory;
 pub use nio::memory_error::MemoryError;
+pub use nio::chunk::Chunk;
+pub use nio::storage_error::StorageError;
+pub use r#struct::chunked_list::ChunkedList;
+pub use variable::variable_slot::VariableSlot;
+pub use variable::variable_registry::VariableRegistry;
 
 /// Canonical constructor convenience, sharing the type's name in the macro namespace.
 // INTENTIONAL(vex): CamelCase constructor macros preserve class-like construction;
