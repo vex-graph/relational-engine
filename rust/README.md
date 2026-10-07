@@ -1,9 +1,14 @@
 # Rust interpretation
 
 This package implements a small learning backend, not a port of Vexspoke's
-allocator. `mem.rs` owns heap-backed byte blocks, `string.rs` projects UTF-8
-bytes, and `ffi.rs` exposes an opaque C owner with copy-in/copy-out operations.
+allocator. `src/nio/mem.rs` owns heap-backed byte blocks, `src/text/string.rs`
+projects UTF-8 bytes, and `src/ffi/memory.rs` exposes an opaque C owner with
+copy-in/copy-out operations. Each directory's `mod.rs` declares its Rust module.
 No block pointer escapes to C. Single-owner calls require external exclusion.
+
+The public module paths are `nio::mem`, `text::string`, and `ffi::memory`.
+Root `Memory`, `Memory!()`, `mem`, `string`, and `ffi::re_memory_*` remain
+available for existing clients. Shared tests mirror these module directories.
 
 ```rust
 use relational_engine_scratchpad::{Memory, bytes};
