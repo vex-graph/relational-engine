@@ -3,9 +3,9 @@
 ## Constitution Link
 
 The complete [workspace constitution](https://gist.github.com/vex-graph/4132a6c45cb6d3797c3e8eff2e94035a)
-governs this repository. Local workspace path: `../../preferences.md`.
-Read it first, then this file, `../../tests/test-preferences.md`, current
-`../../tests/test-checklist.md`, and the actual implementation.
+governs this repository. Local workspace path: `../../../preferences.md`.
+Read it first, then this file, `../../../tests/test-preferences.md`, current
+`../../../tests/test-checklist.md`, and the actual implementation.
 
 ## Law Index (Binding Matrix)
 
@@ -16,13 +16,48 @@ Read it first, then this file, `../../tests/test-preferences.md`, current
 | One Rust Class Per File Law | Rust declarations | One struct/class or enum per implementation file, including private helpers |
 | CamelCase Rust Constructor Macro Law | Rust construction spelling | CamelCase!() macros; snake_case ordinary operations |
 | R2 Responsibility Layout Law | Rust storage and C search | Module/layout owner checks; explicit unimplemented scope |
+| Stable Row and Variable Binding Law | Chunk/registry lifetimes and 32-byte ABI | Growth, layout, failure and C-client owner tests |
+
+### Stable Row and Variable Binding Law
+
+`nio/chunk.rs` owns a fixed-capacity typed row allocation; `struct/chunked_list.rs`
+grows its directory without moving initialized rows. Geometry is chosen at
+construction (named default, caller override), validated for size/alignment and
+immutable thereafter. Rows are append-only, never deleted/reused in this version.
+Growth and mutation require exclusive access; this is not a concurrent radix
+publication implementation. Raw row addresses survive growth but not destruction.
+Failed admission preserves initialized rows/length; rejected owned input is dropped.
+
+`variable/variable_slot.rs` is a C-layout 32-byte binding: `[name: u8[24]][value
+pointer: 8 bytes]`, with offsets 0/24 checked. Names are 1..23 ASCII bytes plus
+NUL and zero padding, folded lowercase under the existing segmented-name grammar.
+Invalid input rejects without silent truncation or mutating prior state.
+This pointer is borrowed VALUE storage, not the legacy `StringSlot.self` link;
+the two records must never be conflated. No dereference/ownership/type validation
+is implied by storing a pointer. Zero slots are unnamed/unbound; registry admission
+requires a valid name. Plain binding replacement is exclusive, not atomic.
+
+`VariableRegistry` owns stable slot rows and rejects folded duplicate names.
+Engine-owned C `search/primitives/name_search` scans fixed 24-byte keys in borrowed
+leaves. It includes no Vexspoke/host headers, owns no allocation, reports invalid
+span admission through engine `exception/throw.h`, and preserves output on failure
+or absence. Rust/FFI use explicit Result/status codes for admission; they do not
+depend on Vexspoke THROW. The C ABI exposes an opaque registry and read-only borrowed
+slot views; caller excludes reads before rebind/drop and retains pointed values.
+Pointers are live-process addresses, not persistent/SSD/GPU identifiers or portable
+serialization. Schema migration and a stable indirection cell remain future work.
+No public free/reuse/generation check exists; using stale/non-live pointers is
+outside the ABI contract, not a claimed safe rejection. The first C adapter can
+be used independently; migration of any existing Vexspoke collection is not implied.
 
 ### R2 Responsibility Layout Law
 
 Relational-engine is an R2 storage backend alongside Vexspoke, not R1 and not
 a GPU driver. Vexspoke may consume its opt-in C ABI; default allocation is unchanged.
 Rust `nio/` owns buffers, heap/foreign storage and future file-backed mappings
-(`MappedFile`/mmap); `io/` owns file access, gathering, indexing and watching.
+(`MappedFile`/mmap); `io/` owns file reads/writes, buffered readers/writers,
+gathering, indexing and watching. Manifest-backed persistence remains proposed;
+no concurrent file-commit/durability contract is implemented or implied.
 FFF means the file-search toolkit at https://github.com/dmtrKovalenko/fff,
 not a new file format; our equivalent remains future work.
 Rust `primitives/` owns byte/number/string values; `variable/` owns named bindings;
@@ -35,9 +70,9 @@ in Graphvex, including dispatch, capabilities and synchronization. No engine
 `compute/` implementation duplicates that owner. CPU atomic publication does not
 prove GPU completion or shared-memory accessibility.
 
-C `src/search/primitives/` is reserved for native primitive-span search over
+C `src/search/primitives` contains native primitive-span name search over
 Rust-owned bytes; imported C reference directories are not relocated or promoted
-to production by this organization. These new areas have no runtime API until
+to production by this organization. Other planned areas have no runtime API until
 implementation and registered owner proof exist. Preserve legacy `text` and root
 Rust aliases while moving existing string implementation to `primitives/`.
 
@@ -65,7 +100,7 @@ Procedural FFI files may declare several operations but no owning class.
 
 The engine is an optional lower-level implementation backend for Vexspoke and
 database consumers, not their supervisor. Production engine code includes no
-Vexspoke, Darkbase or Hotcwap headers. Imported `src/` C reference code retains
+Vexspoke, Darkbase or Hotcwap headers. Imported `src` C reference code retains
 legacy Vexspoke dependencies and is not a standalone runtime implementation.
 
 R1 keeps engine code and storage resident while consumer code reloads. Owners
@@ -101,7 +136,7 @@ contracts for a future backend; this prototype does not implement them yet.
 
 ## Proof
 
-Owner tests live in the independent `../../tests/relational-engine/` checkout.
-The optional Vexspoke header has its own C owner in `../../tests/vexspoke/nio/`.
+Owner tests live in the independent `../../../tests/relational-engine` checkout.
+The optional Vexspoke header has its own C owner in `../../../tests/vexspoke/nio`.
 Use registered runners and the Timestamped Test Checklist Law; current platform,
 sanitizer and migration gaps remain explicit, not production readiness.
