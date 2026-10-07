@@ -1,4 +1,4 @@
-//! DEFINITION: opaque, single-owner C bridge for the learning Memory backend.
+//! DEFINITION: ffi/memory is the opaque C bridge for the learning backend.
 //! OVERVIEW: re_memory_new/drop/copy/read. Status 0=success, 1=invalid,
 //! 2=allocation/identity exhaustion, 3=unknown handle, 4=capacity too small.
 //! Non-null pointers must be valid, aligned, live and externally synchronized.
