@@ -1,9 +1,9 @@
 //! Learning storage layer, not a replacement for Vexspoke's slab allocator.
 //!
 //! ```
-//! use relational_engine_scratchpad::{Memory, bytes};
+//! use relational_engine_scratchpad::{Memory, Bytes};
 //! let mut memory = Memory!();
-//! let hello = memory.copy_bytes(bytes!("hello"))?;
+//! let hello = memory.copy_bytes(Bytes!("hello"))?;
 //! assert_eq!(memory.get(hello)?, b"hello");
 //! # Ok::<(), relational_engine_scratchpad::MemoryError>(())
 //! ```
@@ -13,16 +13,31 @@ pub mod ffi;
 // Preserve existing short client paths while exposing organized modules.
 pub use nio::mem;
 pub use text::string;
-pub use nio::mem::{Memory, MemoryError};
+pub use nio::mem::Memory;
+pub use nio::memory_error::MemoryError;
 
 /// Canonical constructor convenience, sharing the type's name in the macro namespace.
+// INTENTIONAL(vex): CamelCase constructor macros preserve class-like construction;
+// ordinary Rust methods remain snake_case.
 #[macro_export]
 macro_rules! Memory {
     () => { $crate::Memory::new() };
 }
 
-/// Borrow UTF-8 bytes without allocating or constructing a character array.
+/// Compatibility spelling; new construction uses Memory!().
+#[macro_export]
+macro_rules! memory {
+    () => { $crate::Memory!() };
+}
+
+/// Borrow UTF-8 Bytes without allocating or constructing a character array.
+#[macro_export]
+macro_rules! Bytes {
+    ($text:expr) => { ($text).as_bytes() };
+}
+
+/// Compatibility spelling; new byte-view construction uses Bytes!().
 #[macro_export]
 macro_rules! bytes {
-    ($text:expr) => { ($text).as_bytes() };
+    ($text:expr) => { $crate::Bytes!($text) };
 }
