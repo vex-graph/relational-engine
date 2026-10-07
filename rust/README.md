@@ -4,7 +4,8 @@ This package implements a small learning backend, not a port of Vexspoke's
 allocator. `src/nio/mem.rs` owns heap-backed byte blocks, `src/primitives/string.rs`
 projects UTF-8 Bytes, and `src/ffi/memory.rs` exposes an opaque C owner with
 copy-in/copy-out operations. Each directory's `mod.rs` declares its Rust module.
-No block pointer escapes to C. Single-owner calls require external exclusion.
+The byte-memory API exports no block pointer; the new registry API exports
+read-only borrowed slot views. Single-owner calls require external exclusion.
 
 The public module paths are `nio::mem`, `primitives::string`, and `ffi::memory`.
 `text::string` and `text::atomic_string` remain compatibility re-exports.
@@ -16,21 +17,56 @@ means a method is callable; it does not declare another class.
 ## Responsibility layout (R2)
 
 Relational-engine is an R2 backend alongside Vexspoke. Existing memory/string/FFI
-code is implemented; the following reserved modules document future scope only:
+and stable row/binding code is implemented; other modules retain explicit planned scope:
 
-- `src/nio/`: memory/buffers; mmap and foreign storage are not implemented yet.
-- `src/io/`: file gathering/access, FFF-style indexing/search and watching (planned).
-- `src/primitives/`: implemented byte-backed string projection and atomic snapshots.
-- `src/variable/`: named/typed bindings (planned).
-- `src/struct/`: flat collections/records (planned; Rust path `r#struct`).
-- `src/compress/`: ZIP, 7z and ASTC codecs (planned, no transparent RAM compression).
-- `src/virtual/`: GPU-storage/transfer contracts (planned; Rust path `r#virtual`).
-- `src/ffi/`: implemented opaque-owner C ABI.
+- `src/nio`: memory and stable typed Chunk; mmap/foreign storage remain planned.
+- `src/io`: file reads/writes, buffered readers/writers, gathering, FFF-style
+  indexing/search and watching (planned). Manifest-backed persistent objects are
+  proposed, not implemented; serialized identity must use IDs/offsets, not pointers.
+- `src/primitives`: implemented byte-backed string projection and atomic snapshots.
+- `src/variable`: 32-byte VariableSlot and append-only VariableRegistry.
+- `src/struct`: stable ChunkedList (Rust path `r#struct`); broader collections planned.
+- `src/compress`: ZIP, 7z and ASTC codecs (planned, no transparent RAM compression).
+- `src/virtual`: GPU-storage/transfer contracts (planned; Rust path `r#virtual`).
+- `src/ffi`: implemented opaque-owner C ABI.
 
 Graphics-compute shaders and execution belong to Graphvex. No GPU driver is added
-to this crate. C primitive-span search will live in `../src/search/primitives/`;
-that directory has no runtime search implementation yet. The upstream FFF toolkit
+to this crate. C name search lives in `../src/search/primitives`; Cargo builds
+only that module with strict C23 flags, using CC/AR when supplied. The upstream FFF toolkit
 is https://github.com/dmtrKovalenko/fff, not an on-disk format.
+
+## Stable rows and 32-byte bindings
+
+```rust
+use relational_engine_scratchpad::{ChunkedList, VariableRegistry};
+let mut values = ChunkedList!(u64, 64).unwrap();
+values.add(42).unwrap();
+let gold = values.get(0).unwrap() as *const u64;
+let mut names = VariableRegistry!(64).unwrap();
+names.add(b"Gold", gold.cast()).unwrap();
+values.add(99).unwrap(); // Existing row allocation does not move.
+assert_eq!(names.find(b"gold").unwrap(), Some(0));
+// names stores a borrowed pointer: keep values alive while any consumer uses it.
+```
+
+`Chunk!(T[, capacity])` owns one fixed-capacity aligned row allocation.
+`ChunkedList!(T[, rows_per_chunk])` grows its directory without moving rows.
+`VariableSlot!()`, `VariableSlot!(name)`, `VariableSlot!(name, pointer)` keep one
+class per file. Slot layout is `[name: u8[24]][pointer: 8 bytes]`, not an intrusive
+self link. Names fold lowercase, reject invalid/overlong Bytes, and preserve state
+on rejection. `VariableRegistry!([rows_per_chunk])` rejects duplicate folded names
+and calls real engine C search over each initialized leaf. Native lookup is cold.
+
+`include/relational_engine/variable_registry.h` exposes new/drop/add/find/slot/
+set_pointer externs. Its read-only C slot view and native Rust rows have checked
+size/offset parity. Growth keeps issued slot addresses valid until owner drop;
+the value address is borrowed and may be null. C callers exclude all reads before
+rebinding/destruction. No stale-pointer/type validation, removal/reuse, shared
+mutation, stable indirection cell, schema migration or Vexspoke container migration
+is claimed. New chunk/directory allocation has deterministic OOM/retry tests;
+registry owner Box and cold formatted projections still follow abort-on-OOM policy.
+MSVC build and Windows execution remain unproved; native clang/GNU-style toolchains
+are the current C build path. Cross builds require explicit CC and matching AR.
 Root `Memory`, `Memory!()`, `mem`, `string`, and `ffi::re_memory_*` remain
 available for existing clients. Shared tests mirror these module directories.
 Constructor macros are CamelCase: `Memory!()` and `Bytes!()`. Lowercase
@@ -92,7 +128,8 @@ live-reload integration proved. String length replacement works; automatic
 record layout upgrades still require a staged migration/rollback design.
 
 Known gaps: no slabs, BitPool, typed record macros, 16-byte Vexspoke headers,
-pointer compatibility, fault-injected OOM, concurrency, performance or Windows
+pointer compatibility, exhaustive legacy Memory OOM injection, shared registry
+mutation, performance or Windows
 proof, deterministic writer-busy fault injection or full Rust sanitizer proof.
 The constructor follows Rust's abort-on-OOM Box policy. Vec-to-box
 conversion may allocate. These cold operations are not real-time safe. Vexspoke
