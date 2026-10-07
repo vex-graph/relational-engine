@@ -2,18 +2,26 @@
 
 Read the complete [workspace preferences.md constitution](https://gist.github.com/vex-graph/4132a6c45cb6d3797c3e8eff2e94035a)
 before work. In the integrated workspace it is the real workspace-root
-`preferences.md`, not a file to duplicate in this repository.
+`../../../preferences.md`, not a file to duplicate in this repository.
 
 The Git Workflow Law, Feature Implementation and Adversarial Proof Law,
 Living Documentation Law and Test Segregation Law apply. Preserve imported
 reference code until its replacement has an explicit contract and proof.
 
-`src/` and `rust/` are parallel scratchpads, not two production engines.
+Imported C comparison files and the partial Rust/native-search implementation
+are not two complete production engines.
 CMake is CLion-only metadata. Use b/native compiler tooling for actual work;
 do not make the runtime depend on CMake or compile out real diagnostics.
 
 Read [relational-engine-preferences.md](relational-engine-preferences.md) for
 the resident storage, atomic boundary and one-type-per-file contracts.
 Public scratchpad code is not battle-tested readiness. Owner tests live in the
-independent workspace `tests/relational-engine/` checkout; generated binaries,
+independent workspace `../../../tests/relational-engine` checkout; generated binaries,
 Cargo target output and IDE state stay ignored.
+
+This repository belongs to [vexgraph-ecosystem](https://github.com/vexgraph-ecosystem/relational-engine)
+at R2 with workspace path `ecosystem/repos/relational-engine`. Vexspoke
+owns CPU computation/behavior; this engine owns memory/storage and native C
+search. Migration is staged with unchanged Vexspoke default allocation. R1 owns
+residency/lifetimes; GPU shaders/dispatch remain Graphvex R3. See README.md for
+implemented scope and gaps, not a blanket readiness claim.
