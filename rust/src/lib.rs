@@ -1,6 +1,25 @@
-//! Rust interpretation scratchpad for relational-engine.
+//! Learning storage layer, not a replacement for Vexspoke's slab allocator.
 //!
-//! This package intentionally implements no storage manager yet. The adjacent
-//! C reference tree is comparison material, not a linked dependency. Allocation,
-//! borrowing, release and C ABI contracts must be defined and tested before an
-//! implementation is presented as usable.
+//! ```
+//! use relational_engine_scratchpad::{Memory, bytes};
+//! let mut memory = Memory::new();
+//! let hello = memory.copy_bytes(bytes!("hello"))?;
+//! assert_eq!(memory.get(hello)?, b"hello");
+//! # Ok::<(), relational_engine_scratchpad::MemoryError>(())
+//! ```
+pub mod mem;
+pub mod string;
+pub mod ffi;
+pub use mem::{Memory, MemoryError};
+
+/// Constructor convenience; Rust does not support associated `new!` macros.
+#[macro_export]
+macro_rules! memory_new {
+    () => { $crate::Memory::new() };
+}
+
+/// Borrow UTF-8 bytes without allocating or constructing a character array.
+#[macro_export]
+macro_rules! bytes {
+    ($text:expr) => { ($text).as_bytes() };
+}
