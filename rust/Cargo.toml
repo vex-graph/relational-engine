@@ -4,7 +4,12 @@ version = "0.0.0"
 edition = "2024"
 publish = false
 license = "MIT"
-description = "Unimplemented Rust interpretation of the relational storage manager"
+description = "Learning byte-storage backend with an explicit C boundary"
 
 [lib]
 path = "src/lib.rs"
+crate-type = ["rlib", "staticlib"]
+
+[[test]]
+name = "memory_owner"
+path = "../tests/rust/mem_test.rs"
