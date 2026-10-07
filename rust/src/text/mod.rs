@@ -1,5 +1,2 @@
-//! Byte-backed text projections.
-pub mod string;
-pub mod atomic_string;
-mod history;
-mod snapshot;
+//! Compatibility module: primitive byte-string implementations moved to primitives.
+pub use crate::primitives::{string, atomic_string};
