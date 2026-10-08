@@ -1,4 +1,5 @@
 #include "io/process_spawn.h"
+// Production R2 I/O owner: Relational Engine; bounded child-job ABI preserved.
 
 #include <signal.h>
 #include <spawn.h>
@@ -18,7 +19,7 @@ extern char **environ;
  * ============================================================================
  * DEFINITION: ProcessSpawn
  * ============================================================================
- * A bounded child-process job table for the R1 leaf layer: fixed slots
+ * A bounded child-process job table in R2, driven by R1: fixed slots
  * (PROCESS_SPAWN_JOBS_MAX), per-job pid/exit/done rows, table-level mirrors,
  * a cancel flag, and a timeout — zero steady-state allocation, no threads.
  * Spawns via posix_spawnp (never system(), never a blocking waitpid, never
@@ -34,16 +35,17 @@ extern char **environ;
  * ============================================================================
  * CLASS: ProcessSpawn (io/process_spawn.c)
  * ============================================================================
- * A bounded child-process job table for the R1 leaf layer. Fixed slots
+ * A bounded child-process job table in R2, driven by R1. Fixed slots
  * (PROCESS_SPAWN_JOBS_MAX), per-job pid/exit/done rows, table-level
  * mirrors, cancel flag, and timeout — zero steady-state allocation, no
  * threads. Spawns via posix_spawnp (never system(), never a blocking
  * waitpid, never UINT64_MAX): ProcessSpawn_poll reaps with WNOHANG in
  * ~1ms slices up to budgetNs clamped to PROCESS_SPAWN_POLL_MAX_NS
- * (100ms, Rule 27); ProcessSpawn_cancel raises the flag and SIGTERMs
+ * (100ms, the Bounded Wait Law); ProcessSpawn_cancel raises the flag and SIGTERMs
  * unfinished jobs. The decoder-binary seam: callers (e.g. graphvex
  * FrameImporter) spawn external decoders through this shape instead of
- * popen/libav links.
+ * popen/libav links. Reaping decrements the live count exactly once; completed
+ * slots are reusable. Destruction requires the caller to finish reaping jobs.
  *
  * STRUCT FIELDS (Mirroring io/process_spawn.h — exactly this file's class):
  * ----------------------------------------------------------------------------
@@ -56,7 +58,7 @@ extern char **environ;
  *     uint32_t count;                             // live jobs (0..JOBS_MAX)
  *   }
  *
- * SLOT RECORD (ProcessSpawnJob — Rule 3 co-location, zero behavior):
+ * SLOT RECORD (ProcessSpawnJob — Single Class Per File Law, zero behavior):
  * ----------------------------------------------------------------------------
  *   int32_t pid;       // child pid (> 0 tracked, 0 = slot free)
  *   int32_t exitCode;  // WEXITSTATUS / -signal once done
@@ -141,6 +143,7 @@ static bool processSpawnReapOnce(ProcessSpawn *self) {
         if (got < 0) {
             (*job).exitCode = -1;
             (*job).done = true;
+            (*self).count -= 1;
             continue;
         }
         if (WIFEXITED(status))
@@ -150,6 +153,7 @@ static bool processSpawnReapOnce(ProcessSpawn *self) {
         else
             (*job).exitCode = -1;
         (*job).done = true;
+        (*self).count -= 1;
         (*self).exitCode = (*job).exitCode;
     }
     return allDone;
