@@ -65,7 +65,14 @@ registry, C allocator parity, compaction or concurrent allocation is claimed.
 Identity metadata, optional-name integration, bulk and scratch remain future work.
 
 Relational-engine is an R2 storage backend alongside Vexspoke, not R1 and not
-a GPU driver. Vexspoke may consume its opt-in C ABI; default allocation is unchanged.
+a GPU driver. Engine `src/io` and `src/nio` now own the production native C
+Memory/MemoryArena/Transient and file/cache/log/transport ABI. Vexspoke has no
+IO/NIO implementation copies; the production build consumes the engine by
+default. C allocation semantics, 16-byte headers and legacy project type IDs
+are preserved, not rewritten into Rust. Existing Rust typed pools remain a
+distinct API, not a silent allocator substitution. Native code may borrow
+Vexspoke CPU-only spin/crypto/type/annotation contracts; never downstream or
+host headers, duplicate memory implementations or a recursive target graph.
 Rust `nio/` owns buffers, heap/foreign storage and future file-backed mappings
 (`MappedFile`/mmap); `io/` owns file reads/writes, buffered readers/writers,
 gathering, indexing and watching. Manifest-backed persistence remains proposed;
@@ -83,8 +90,9 @@ in Graphvex, including dispatch, capabilities and synchronization. No engine
 prove GPU completion or shared-memory accessibility.
 
 C `src/search/primitives` contains native primitive-span name search over
-Rust-owned bytes; imported C reference directories are not relocated or promoted
-to production by this organization. Other planned areas have no runtime API until
+Rust-owned bytes. C `src/io` and `src/nio` are promoted migrated production
+implementations; `src/reflection` and `src/relational` remain comparison code.
+Other planned Rust areas have no runtime API until
 implementation and registered owner proof exist. Preserve legacy `text` and root
 Rust aliases while moving existing string implementation to `primitives/`.
 
@@ -110,10 +118,12 @@ Procedural FFI files may declare several operations but no owning class.
 
 ### Resident Storage Boundary Law
 
-The engine is an optional lower-level implementation backend for Vexspoke and
-database consumers, not their supervisor. Production engine code includes no
-Vexspoke, Darkbase or Hotcwap headers. Imported `src` C reference code retains
-legacy Vexspoke dependencies and is not a standalone runtime implementation.
+The engine is the production IO/NIO implementation owner for Vexspoke and
+database consumers, not their supervisor. Its migrated native IO/NIO borrows
+Vexspoke CPU-only contracts under the constitution's explicit R2 seam; it never
+includes Darkbase/Hotcwap or other downstream headers. Native migrated code
+is compiled and linked by the default build. Other imported comparison code
+does not confer standalone runtime dependency closure.
 
 R1 keeps engine code and storage resident while consumer code reloads. Owners
 belong to the host lifetime, never unloadable consumer globals. Stop admission
@@ -149,6 +159,7 @@ contracts for a future backend; this prototype does not implement them yet.
 ## Proof
 
 Owner tests live in the independent `../../../tests/relational-engine` checkout.
-The optional Vexspoke header has its own C owner in `../../../tests/vexspoke/nio`.
+Migrated native IO/NIO owners live in `../../../tests/relational-engine/io` and
+`../../../tests/relational-engine/nio`, including the Rust byte/string handshake.
 Use registered runners and the Timestamped Test Checklist Law; current platform,
 sanitizer and migration gaps remain explicit, not production readiness.
