@@ -3,19 +3,21 @@
 //! explicit empty-chunk release keeps directory positions so survivors keep indices.
 //! OVERVIEW: chunks Vec<Option<TypedChunk<T>>> (stable directory positions),
 //! rows_per_chunk usize (immutable geometry), len usize (total live count).
-//! Public: new/zero/add/remove/get/get_mut/release_empty_chunks/get_chunk_count/
-//! get_rows_per_chunk/len/is_empty/to_string/to_string_struct.
+//! Public: new/zero/add/remove/get/get_mut/add_handle/get_handle/get_handle_mut/
+//! remove_handle/release_empty_chunks/get_chunk_count/get_rows_per_chunk/len/
+//! is_empty/to_string/to_string_struct.
 //! Failed admission drops the incoming T, preserves live state and may grow only
 //! private directory capacity. Exclusive mutation excludes Rust borrows; callers
 //! must also exclude raw-pointer users before remove, release or destruction.
-//! Returned usize locations are pool-local and reusable, NOT identities. No
-//! registered ecosystem type ID, generation, concurrent allocator or C ABI yet.
-use crate::nio::{typed_chunk::{TypedChunk, TYPED_CHUNK_ROWS_DEFAULT}, storage_error::StorageError, projection};
+//! Raw usize locations are reusable, NOT identities; the generation-tagged Handle
+//! surface is the identity API (a reused slot rejects its earlier handle). No
+//! registered ecosystem type ID, concurrent allocator or C ABI yet.
+use crate::nio::{handle::Handle, typed_chunk::{TypedChunk, TYPED_CHUNK_ROWS_DEFAULT}, storage_error::StorageError, projection};
 
 pub struct TypedPool<T> {
-    chunks: Vec<Option<TypedChunk<T>>>,
-    rows_per_chunk: usize,
-    len: usize,
+    chunks: Vec<Option<TypedChunk<T>>>,  // lazy chunk directory; a released chunk stays None in place
+    rows_per_chunk: usize,               // fixed row capacity of every chunk (immutable geometry)
+    len: usize,                          // total live values across all chunks
 }
 
 impl<T> TypedPool<T> {
@@ -72,6 +74,38 @@ impl<T> TypedPool<T> {
     /// Mutably borrow a live value by pool-local index, or return `None` when absent.
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         self.chunks.get_mut(index / self.rows_per_chunk)?.as_mut()?.get_mut(index % self.rows_per_chunk)
+    }
+
+    /// Insert and return a generation-tagged identity for the new value.
+    pub fn add_handle(&mut self, value: T) -> Result<Handle, StorageError> {
+        let index = self.add(value)?;
+        let chunk = self.chunks[index / self.rows_per_chunk].as_ref()
+            .ok_or(StorageError::Bounds)?;
+        Ok(Handle::new(index, chunk.generation_at(index % self.rows_per_chunk)))
+    }
+
+    /// Borrow the value a live handle names; a stale or out-of-range handle returns `None`.
+    pub fn get_handle(&self, handle: Handle) -> Option<&T> {
+        let index = handle.index();
+        let chunk = self.chunks.get(index / self.rows_per_chunk)?.as_ref()?;
+        chunk.get_handle(Handle::new(index % self.rows_per_chunk, handle.generation()))
+    }
+
+    /// Mutably borrow the value a live handle names; a stale handle returns `None`.
+    pub fn get_handle_mut(&mut self, handle: Handle) -> Option<&mut T> {
+        let index = handle.index();
+        let chunk = self.chunks.get_mut(index / self.rows_per_chunk)?.as_mut()?;
+        chunk.get_handle_mut(Handle::new(index % self.rows_per_chunk, handle.generation()))
+    }
+
+    /// Remove the value a live handle names and invalidate the handle; a stale handle rejects.
+    pub fn remove_handle(&mut self, handle: Handle) -> Result<T, StorageError> {
+        let index = handle.index();
+        let chunk = self.chunks.get_mut(index / self.rows_per_chunk)
+            .and_then(Option::as_mut).ok_or(StorageError::Bounds)?;
+        let value = chunk.remove_handle(Handle::new(index % self.rows_per_chunk, handle.generation()))?;
+        self.len -= 1;
+        Ok(value)
     }
 
     /// Release backing allocations only; retain directory positions for survivors.

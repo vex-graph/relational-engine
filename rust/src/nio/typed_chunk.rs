@@ -3,12 +3,16 @@
 //! without moving survivors. Only occupied slots are read or dropped. All mutation
 //! requires exclusive access; raw pointers expire on removal or owner destruction.
 //! OVERVIEW: fields in order: rows Vec<MaybeUninit<T>> (fixed allocation),
-//! occupied Vec<u64> (one bit per row), len usize (live count).
-//! Public: new/zero/add/remove/get/get_mut/len/is_empty/get_capacity/is_full,
-//! to_string/to_string_struct. Private: validate_geometry; Drop destroys live rows.
+//! occupied Vec<u64> (one bit per row), generations Vec<u32> (one per row), len usize.
+//! Public: new/zero/add/remove/get/get_mut/add_handle/get_handle/get_handle_mut/
+//! remove_handle/generation_at/len/is_empty/get_capacity/is_full, to_string/
+//! to_string_struct. Private: validate_geometry, bump_generation; Drop destroys live rows.
 //! Invalid geometry and fallible allocations reject before publishing state.
-//! Full add drops the incoming value and preserves existing rows. Indices are
-//! reusable locations, NOT generation-tagged identities or stale-reference checks.
+//! Full add drops the incoming value and preserves existing rows. Raw indices are
+//! reusable locations; the generation-tagged `Handle` surface (`add_handle` /
+//! `get_handle` / `get_handle_mut` / `remove_handle`) is the identity API, so a
+//! handle to a removed-and-reused slot is rejected as stale.
+use super::handle::Handle;
 use super::{projection, storage_error::StorageError};
 use std::mem::MaybeUninit;
 
@@ -18,9 +22,10 @@ pub const TYPED_CHUNK_ROWS_DEFAULT: usize = 1024;
 const BITMAP_WORD_BITS: usize = u64::BITS as usize;
 
 pub struct TypedChunk<T> {
-    rows: Vec<MaybeUninit<T>>,
-    occupied: Vec<u64>,
-    len: usize,
+    rows: Vec<MaybeUninit<T>>,  // fixed allocation of `capacity` slot rows, uninit until written
+    occupied: Vec<u64>,         // packed occupancy bitmap: one bit per row slot
+    generations: Vec<u32>,      // one generation per row slot; bumped on removal so stale handles reject
+    len: usize,                 // number of occupied (live) slots
 }
 
 impl<T> TypedChunk<T> {
@@ -44,7 +49,10 @@ impl<T> TypedChunk<T> {
         let mut occupied = Vec::new();
         occupied.try_reserve_exact(words).map_err(|_| StorageError::Allocation)?;
         occupied.resize(words, 0);
-        Ok(Self { rows, occupied, len: 0 })
+        let mut generations = Vec::new();
+        generations.try_reserve_exact(capacity).map_err(|_| StorageError::Allocation)?;
+        generations.resize(capacity, 0u32);
+        Ok(Self { rows, occupied, generations, len: 0 })
     }
 
     /// Create a typed chunk using the named default row capacity.
@@ -71,6 +79,7 @@ impl<T> TypedChunk<T> {
     pub fn remove(&mut self, index: usize) -> Result<T, StorageError> {
         if self.get(index).is_none() { return Err(StorageError::Bounds); }
         self.occupied[index / BITMAP_WORD_BITS] &= !(1u64 << (index % BITMAP_WORD_BITS));
+        self.bump_generation(index);
         self.len -= 1;
         // SAFETY: occupancy proved initialization; exclusive access transfers the
         // value exactly once and clearing its bit prevents later reads/drops.
@@ -100,6 +109,51 @@ impl<T> TypedChunk<T> {
     pub fn get_capacity(&self) -> usize { self.rows.len() }
     /// Return whether every row slot is occupied.
     pub fn is_full(&self) -> bool { self.len == self.rows.len() }
+
+    /// The generation stored for a row slot (0 while the slot was never freed).
+    pub fn generation_at(&self, index: usize) -> u32 {
+        self.generations.get(index).copied().unwrap_or(0)
+    }
+
+    // Advance a freed slot's generation so every earlier handle to it goes stale.
+    // Generation 0 is reserved for a never-freed slot, so wrap skips back to 1.
+    fn bump_generation(&mut self, index: usize) {
+        let next = self.generations[index].wrapping_add(1);
+        self.generations[index] = if next == 0 { 1 } else { next };
+    }
+
+    /// Insert and return a generation-tagged identity for the new value.
+    pub fn add_handle(&mut self, value: T) -> Result<Handle, StorageError> {
+        let index = self.add(value)?;
+        Ok(Handle::new(index, self.generations[index]))
+    }
+
+    /// Borrow the value a live handle names; a stale or out-of-range handle returns `None`.
+    pub fn get_handle(&self, handle: Handle) -> Option<&T> {
+        let index = handle.index();
+        if index >= self.rows.len() || self.generations[index] != handle.generation() {
+            return None;
+        }
+        self.get(index)
+    }
+
+    /// Mutably borrow the value a live handle names; a stale handle returns `None`.
+    pub fn get_handle_mut(&mut self, handle: Handle) -> Option<&mut T> {
+        let index = handle.index();
+        if index >= self.rows.len() || self.generations[index] != handle.generation() {
+            return None;
+        }
+        self.get_mut(index)
+    }
+
+    /// Remove the value a live handle names and invalidate the handle; a stale handle rejects.
+    pub fn remove_handle(&mut self, handle: Handle) -> Result<T, StorageError> {
+        let index = handle.index();
+        if index >= self.rows.len() || self.generations[index] != handle.generation() {
+            return Err(StorageError::Bounds);
+        }
+        self.remove(index)
+    }
 
     /// Write a bounded value summary and report whether the destination was truncated.
     pub fn to_string(&self, dest: &mut [u8], out_truncated: &mut bool) -> bool {

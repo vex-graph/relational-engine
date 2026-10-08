@@ -1,4 +1,5 @@
 //! Storage ownership and allocation vocabulary.
+pub mod handle;
 pub mod mem;
 pub mod memory_error;
 pub mod storage_error;
