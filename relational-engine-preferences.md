@@ -52,6 +52,18 @@ be used independently; migration of any existing Vexspoke collection is not impl
 
 ### R2 Responsibility Layout Law
 
+The reusable typed-storage slice is separate from the append-only classes:
+`nio/typed_chunk.rs` owns aligned object rows and a packed occupancy bitmap;
+`struct/typed_pool.rs` owns a growable directory with lazy backing chunks.
+The caller-selected default is 1,024 rows per chunk, never a total ceiling.
+Exclusive removal transfers ownership out and reuses holes without moving live
+objects. Explicit empty-chunk release retains directory positions and requires
+excluding raw-pointer borrowers. Failed fallible growth preserves all live state
+and drops the rejected incoming value. Pool-local indices are reusable locations,
+not generation-tagged handles; no stale-pointer validation, ecosystem type
+registry, C allocator parity, compaction or concurrent allocation is claimed.
+Identity metadata, optional-name integration, bulk and scratch remain future work.
+
 Relational-engine is an R2 storage backend alongside Vexspoke, not R1 and not
 a GPU driver. Vexspoke may consume its opt-in C ABI; default allocation is unchanged.
 Rust `nio/` owns buffers, heap/foreign storage and future file-backed mappings
