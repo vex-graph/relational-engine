@@ -121,14 +121,16 @@ static bool chainIsValid(const uint32_t *parents, uint32_t count) {
         if (parents[i] >= count)
             return false;                       // parent out of range
     }
+    // A walk is legal when it reaches a root within `count` hops. A self-parent
+    // (parents[i] == i) is a ROOT encoding, not a cycle; only a loop of two or
+    // more distinct classes can spin, so only that is rejected (the Bounded Wait
+    // Law).
     for (uint32_t i = 1u; i < count; ++i) {
-        uint32_t cur = parents[i];
+        uint32_t cur = i;
         uint32_t hops = 0u;
-        while (cur != 0u) {
-            if (cur == i)
-                return false;                   // loop back to the start
+        while (parents[cur] != 0u && parents[cur] != cur) {
             if (++hops > count)
-                return false;                   // pigeonhole backstop
+                return false;                   // cycle: never roots
             cur = parents[cur];
         }
     }
