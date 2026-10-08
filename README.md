@@ -81,6 +81,11 @@ files remain comparison material; migrated native IO/NIO is production code.
 - `rust`: Cargo-recognized Rust scratchpad for the future storage manager.
   A learning backend now owns byte blocks and exposes a standalone C copy ABI;
   it is not the Vexspoke allocator or a production storage manager.
+- `rust/src/nio/handle.rs`: the generation-tagged `Handle` identity for reusable
+  typed slots — `TypedChunk`/`TypedPool` `add_handle`/`get_handle`/`remove_handle`
+  reject a reused slot as stale.
+- `docs/relational-engine-primer.md`: a plain-English primer on the engine, the
+  C/Rust ABI and the data model.
 - `rust/annotations` + `rust/src/annotation.rs`: a zero-dependency proc-macro
   crate providing the Rust form of the C `;;` annotation markers (`#[overview]`,
   `#[intention("...")]`, `#[what("T")]`, …); `annotation.rs` re-exports them so
