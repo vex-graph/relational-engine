@@ -51,6 +51,7 @@
 
 // filewriter.c — FileWriter port (Legacy: io/FileWriter.java).
 
+/** Open a binary output path, creating missing parent directories and enabling full buffering. */
 bool FileWriter_open(FileWriter *w, const char *path) {
     if (!w || !path)
         return false;
@@ -77,6 +78,7 @@ bool FileWriter_open(FileWriter *w, const char *path) {
     return true;
 }
 
+/** Write one complete byte span when open, adding its length to the flushed-count field on success. */
 void FileWriter_write(FileWriter *w, const uint8_t *data, size_t len) {
     if (!(*w).open || len == 0)
         return;
@@ -84,11 +86,13 @@ void FileWriter_write(FileWriter *w, const uint8_t *data, size_t len) {
         (*w).bytes_written += len;
 }
 
+/** Flush the stdio buffer when the writer is open. */
 void FileWriter_flush(FileWriter *w) {
     if ((*w).open)
         fflush((*w).out);
 }
 
+/** Flush and close an open writer, then clear its handle and open flag. */
 void FileWriter_close(FileWriter *w) {
     if (!(*w).open)
         return;
@@ -98,6 +102,7 @@ void FileWriter_close(FileWriter *w) {
     (*w).open = false;
 }
 
+/** Return the writer's tracked byte count. */
 uint64_t FileWriter_bytesWritten(const FileWriter *w) {
     return (*w).bytes_written;
 }

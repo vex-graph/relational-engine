@@ -44,10 +44,12 @@ void HotFileSys_init(void) {
     // Start macOS FSEvents background thread here
 }
 
+/** Draft stub for stopping the future file-watch service; currently does nothing. */
 void HotFileSys_shutdown(void) {
     // ;;DRAFT
 }
 
+/** Draft stub for draining future file-watch events; currently does nothing. */
 void HotFileSys_pumpEvents(void) {
     // ;;DRAFT
     // Process queue and trigger lock-safe reads

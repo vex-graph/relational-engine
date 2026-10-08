@@ -20,11 +20,13 @@ use proc_macro::{TokenStream, TokenTree};
 
 // Emit a single compile-time error so a malformed annotation fails loudly
 // instead of being silently accepted.
+/// Build a compile_error token stream naming the malformed annotation and reason.
 fn invalid(name: &str, message: &str) -> TokenStream {
     let text = format!("compile_error!({:?});", format!("{name}: {message}"));
     text.parse().expect("compile_error! is valid tokens")
 }
 
+/// Pass the annotated item through only when the attribute has no arguments.
 fn passthrough_no_args(name: &str, attr: TokenStream, item: TokenStream) -> TokenStream {
     if attr.is_empty() {
         item
@@ -33,6 +35,7 @@ fn passthrough_no_args(name: &str, attr: TokenStream, item: TokenStream) -> Toke
     }
 }
 
+/// Pass the annotated item through only when the attribute has one string literal argument.
 fn passthrough_string(name: &str, attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut trees = attr.into_iter();
     match (trees.next(), trees.next()) {
@@ -45,6 +48,7 @@ macro_rules! no_arg_marker {
     ($($fn_name:ident => $label:literal),* $(,)?) => {
         $(
             #[proc_macro_attribute]
+            /// Validate a marker that accepts no arguments, then return its item unchanged.
             pub fn $fn_name(attr: TokenStream, item: TokenStream) -> TokenStream {
                 passthrough_no_args($label, attr, item)
             }
@@ -67,6 +71,7 @@ macro_rules! string_marker {
     ($($fn_name:ident => $label:literal),* $(,)?) => {
         $(
             #[proc_macro_attribute]
+            /// Validate a marker's single string argument, then return its item unchanged.
             pub fn $fn_name(attr: TokenStream, item: TokenStream) -> TokenStream {
                 passthrough_string($label, attr, item)
             }

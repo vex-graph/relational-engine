@@ -94,6 +94,7 @@ static char cache_buf[FILE_PATH_MAX];
 static char cache_index_buf[FILE_PATH_MAX];
 static bool ensured;
 
+/** Resolve the per-user home root using the platform-specific precedence below. */
 static void resolve_base(char *out) {
     // 1. $VEX_HOME override (test seam)
     const char *vex_home = getenv("VEX_HOME");
@@ -136,6 +137,7 @@ static void resolve_base(char *out) {
     // base is unavailable (e.g. no HOME on non-macOS/non-Windows).
 }
 
+/** Resolve the home root and append a nonempty relative subdirectory name. */
 static void build_path(char *out, const char *sub) {
     resolve_base(out);
     if (*sub != '\0') {
@@ -144,6 +146,7 @@ static void build_path(char *out, const char *sub) {
     }
 }
 
+/** Resolve the cache root and append cache plus an optional subsystem component. */
 static void build_cache_path(char *out, const char *subsystem) {
     resolve_base(out);
     size_t len = strlen(out);
@@ -153,42 +156,50 @@ static void build_cache_path(char *out, const char *subsystem) {
         snprintf(out + len, FILE_PATH_MAX - len, "/%s/%s", CACHE_NAME, subsystem);
 }
 
+/** Return the resolved per-user engine home directory in static storage. */
 const char *VexHome_root(void) {
     build_path(root_buf, "");
     return root_buf;
 }
 
+/** Return the projects directory path in static storage. */
 const char *VexHome_projects(void) {
     build_path(projects_buf, PROJECTS_NAME);
     return projects_buf;
 }
 
+/** Return the logs directory path in static storage. */
 const char *VexHome_logs(void) {
     build_path(logs_buf, LOGS_NAME);
     return logs_buf;
 }
 
+/** Return the fonts directory path in static storage. */
 const char *VexHome_fonts(void) {
     build_path(fonts_buf, FONTS_NAME);
     return fonts_buf;
 }
 
+/** Return the placeholder-assets directory path in static storage. */
 const char *VexHome_placeholder(void) {
     build_path(placeholder_buf, PLACEHOLDER);
     return placeholder_buf;
 }
 
+/** Return the cache directory path for a subsystem, or the shared cache root when null/empty. */
 const char *VexHome_cache(const char *subsystem) {
     build_cache_path(cache_buf, subsystem);
     return cache_buf;
 }
 
+/** Return the subsystem cache's dictionary.ini path in static storage. */
 const char *VexHome_cacheIndex(const char *subsystem) {
     const char *cache_dir = VexHome_cache(subsystem);
     snprintf(cache_index_buf, FILE_PATH_MAX, "%s/%s", cache_dir, INDEX_FILE);
     return cache_index_buf;
 }
 
+/** Ensure the subsystem cache directory and create its index only when absent. */
 bool VexHome_cacheEnsure(const char *subsystem) {
     const char *cache_dir = VexHome_cache(subsystem);
     if (!File_mkdirs(cache_dir))
@@ -224,6 +235,7 @@ bool VexHome_cacheEnsure(const char *subsystem) {
     return ok;
 }
 
+/** Idempotently create the root and standard projects, logs, fonts, placeholder, and cache directories. */
 bool VexHome_ensure(void) {
     if (ensured)
         return true;
@@ -243,6 +255,7 @@ bool VexHome_ensure(void) {
     return true;
 }
 
+/** Ensure the home layout and return the engine log path within its logs directory. */
 const char *VexHome_defaultLogPath(void) {
     VexHome_ensure();
     snprintf(logs_buf, FILE_PATH_MAX, "%s/%s", VexHome_logs(), LOG_FILE);

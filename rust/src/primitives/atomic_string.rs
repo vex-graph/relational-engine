@@ -19,6 +19,7 @@ pub struct AtomicString {
 }
 
 impl AtomicString {
+    /// Publish the initial snapshot and establish a retained-byte budget for future updates.
     pub fn new(bytes: &[u8], retention_limit: usize) -> Result<Self, MemoryError> {
         let value = Self {
             current: AtomicPtr::new(std::ptr::null_mut()),
@@ -29,6 +30,7 @@ impl AtomicString {
         Ok(value)
     }
 
+    /// Acquire the current immutable snapshot; its borrow remains valid for this owner's lifetime.
     pub fn get(&self) -> &[u8] {
         let pointer = self.current.load(Ordering::Acquire);
         // Construction publishes before returning. Retention owns this allocation
@@ -36,6 +38,7 @@ impl AtomicString {
         unsafe { &(*pointer).bytes }
     }
 
+    /// Copy and publish a new snapshot, rejecting busy writers or exhausted retention without replacing current data.
     pub fn set(&self, source: &[u8]) -> Result<(), MemoryError> {
         let cost = source.len().checked_add(std::mem::size_of::<Snapshot>())
             .ok_or(MemoryError::Exhausted)?;

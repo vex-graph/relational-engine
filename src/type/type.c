@@ -85,6 +85,7 @@ static uint32_t g_bareCount = 0;
 
 // Grow the slate to at least `needed` rows (doubling, cold start 8). On OOM
 // the slate is left untouched and registration fails; the caller drops.
+/** Grow the parent-chain registration table to at least needed rows. */
 static bool growSlate(size_t needed) {
     if (needed <= g_typeTableCap) return true;
     size_t newCap = (g_typeTableCap == 0) ? 8 : g_typeTableCap * 2;
@@ -99,6 +100,7 @@ static bool growSlate(size_t needed) {
     return true;
 }
 
+/** Find a registered parent-chain row by its project identifier. */
 static const TypeParentsRow *findTable(uint64_t proj) {
     for (size_t i = 0; i < g_typeTableCount; ++i) {
         const TypeParentsRow *row = &g_typeTables[i];
@@ -112,6 +114,7 @@ static const TypeParentsRow *findTable(uint64_t proj) {
 // and no class loops back on itself. A self-parent (parents[i] == i) and a
 // mutual cycle both fail here, so Type_isA can never be handed a spinning
 // table (the Bounded Wait Law).
+/** Validate parent indices and reject multi-class cycles before chain publication. */
 static bool chainIsValid(const uint32_t *parents, uint32_t count) {
     if (parents == nullptr)
         return count == 0u;                     // empty table only
@@ -137,6 +140,7 @@ static bool chainIsValid(const uint32_t *parents, uint32_t count) {
     return true;
 }
 
+/** Return the registered parent-chain length used to bound Type_isA traversal. */
 static uint32_t chainCount(uint64_t proj) {
     if (proj == 0u || proj == PROJ_VEXSPOKE)
         return g_bareCount;
@@ -144,6 +148,7 @@ static uint32_t chainCount(uint64_t proj) {
     return row != nullptr ? (*row).count : 0u;
 }
 
+/** Register or replace one non-Vexspoke project's validated class-parent table. */
 bool Type_registerParents(uint64_t proj, const uint32_t *parents, uint32_t count) {
     if (proj == 0u)
         return false;
@@ -169,6 +174,7 @@ bool Type_registerParents(uint64_t proj, const uint32_t *parents, uint32_t count
     return true;
 }
 
+/** Register or replace the validated parent table for bare/Vexspoke class ids. */
 bool Type_registerBareParents(const uint32_t *parents, uint32_t count) {
     if (!chainIsValid(parents, count))
         return false;
@@ -177,6 +183,7 @@ bool Type_registerBareParents(const uint32_t *parents, uint32_t count) {
     return true;
 }
 
+/** Return a class's parent id, treating absent or unregistered entries as roots. */
 uint64_t Type_getParentClass(uint64_t classId) {
     uint64_t proj = classId & MASK_PROJECT;
     uint64_t cls = classId & MASK_CLASS;
@@ -195,6 +202,7 @@ uint64_t Type_getParentClass(uint64_t classId) {
     return cls;                                    // unregistered project = root
 }
 
+/** Map an encoded project byte to its architecture id; bare or unknown projects default to Vexspoke. */
 uint64_t Type_arch(uint64_t classId) {
     uint64_t proj = classId & MASK_PROJECT;
     if (proj == PROJ_VEXSPOKE)
@@ -214,6 +222,7 @@ uint64_t Type_arch(uint64_t classId) {
     return ARCH_VEXSPOKE;
 }
 
+/** Test class ancestry within the same project using a walk bounded by its registered chain length. */
 int Type_isA(uint64_t classId, uint64_t ancestorId) {
     uint64_t proj = classId & MASK_PROJECT;
     uint64_t target = ancestorId & MASK_CLASS;

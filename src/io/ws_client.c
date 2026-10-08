@@ -76,12 +76,14 @@
 // io/ws_client.c — WsClient port. Bounded frame slot, R0-fed, never blocks
 // past WS_CLIENT_POLL_MAX_NS and never touches a socket or a thread.
 
+/** Read the monotonic clock in nanoseconds for the poll timeout budget. */
 static uint64_t wsClientNowNs(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (uint64_t) ts.tv_sec * 1000000000ULL + (uint64_t) ts.tv_nsec;
 }
 
+/** Sleep for one cancel-check interval used by bounded polling. */
 static void wsClientSleepSlice(void) {
     struct timespec slice;
     slice.tv_sec = 0;
@@ -89,6 +91,7 @@ static void wsClientSleepSlice(void) {
     nanosleep(&slice, nullptr);
 }
 
+/** Allocate and initialize a client slot, clamping its default timeout to the supported maximum. */
 static WsClient *wsClientCreate(uint64_t timeoutNs) {
     WsClient *self = (WsClient*) Memory_alloc(TYPE_WS_CLIENT_SINGLETON, sizeof(WsClient));
     if (!self)
@@ -103,21 +106,25 @@ static WsClient *wsClientCreate(uint64_t timeoutNs) {
 }
 
 // CONSTRUCTORS
+/** Construct a client with a zero-duration default poll timeout. */
 WsClient *WsClient_0(void) {
     return wsClientCreate(0);
 }
 
+/** Construct a client with the supplied default timeout, clamped to the maximum. */
 WsClient *WsClient_1(uint64_t timeoutNs) {
     return wsClientCreate(timeoutNs);
 }
 
 // CORE FUNCTIONS
+/** Release the arena-backed client slot; callers must exclude concurrent polling. */
 void WsClient_free(WsClient *self) {
     if (!self)
         return;
     Memory_free(self);
 }
 
+/** Append caller-fed bytes to the fixed receive slot, rejecting empty or overflowing input. */
 bool WsClient_feed(WsClient *self, const uint8_t *Bytes, uint32_t len) {
     if (!self || !Bytes)
         return false;
@@ -130,6 +137,7 @@ bool WsClient_feed(WsClient *self, const uint8_t *Bytes, uint32_t len) {
     return true;
 }
 
+/** Wait within the capped budget for buffered bytes, then copy and consume them if the destination fits. */
 bool WsClient_poll(WsClient *self, uint64_t timeoutNs, uint8_t *dest,
                    uint32_t destCap, uint32_t *outLen) {
     if (outLen)
@@ -161,12 +169,14 @@ bool WsClient_poll(WsClient *self, uint64_t timeoutNs, uint8_t *dest,
     return true;
 }
 
+/** Set the cancellation flag so current or future polls return without waiting further. */
 void WsClient_cancel(WsClient *self) {
     if (!self)
         return;
     (*self).cancelled = true;
 }
 
+/** Discard all pending receive bytes without changing connection or cancellation state. */
 void WsClient_clear(WsClient *self) {
     if (!self)
         return;
@@ -174,12 +184,14 @@ void WsClient_clear(WsClient *self) {
 }
 
 // SETTERS
+/** Replace the stored connection state when the client pointer is non-null. */
 void WsClient_setState(WsClient *self, WsClientState state) {
     if (!self)
         return;
     (*self).state = state;
 }
 
+/** Set the default poll timeout, clamped to the maximum permitted interval. */
 void WsClient_setTimeoutNs(WsClient *self, uint64_t timeoutNs) {
     if (!self)
         return;
@@ -188,6 +200,7 @@ void WsClient_setTimeoutNs(WsClient *self, uint64_t timeoutNs) {
     (*self).timeoutNs = timeoutNs;
 }
 
+/** Set or clear the poll cancellation flag. */
 void WsClient_setCancelled(WsClient *self, bool cancelled) {
     if (!self)
         return;
@@ -195,24 +208,28 @@ void WsClient_setCancelled(WsClient *self, bool cancelled) {
 }
 
 // GETTERS
+/** Return the stored state, using CLOSED as the null-pointer default. */
 WsClientState WsClient_getState(const WsClient *self) {
     if (!self)
         return WS_CLIENT_CLOSED;
     return (*self).state;
 }
 
+/** Return the stored default poll timeout, or zero for a null pointer. */
 uint64_t WsClient_getTimeoutNs(const WsClient *self) {
     if (!self)
         return 0;
     return (*self).timeoutNs;
 }
 
+/** Return the cancellation flag, treating a null client as cancelled. */
 bool WsClient_isCancelled(const WsClient *self) {
     if (!self)
         return true;
     return (*self).cancelled;
 }
 
+/** Return the number of buffered receive bytes, or zero for a null client. */
 uint32_t WsClient_getPending(const WsClient *self) {
     if (!self)
         return 0;

@@ -12,6 +12,7 @@ use crate::variable::variable_slot::VariableSlot;
 use crate::nio::storage_error::StorageError;
 use crate::variable::variable_slot::VARIABLE_NAME_MAX;
 
+/// Map a registry storage error to the stable numeric status used by the C ABI.
 fn status(error: StorageError) -> u32 {
     match error {
         StorageError::Layout | StorageError::InvalidName => 1,

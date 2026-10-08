@@ -51,14 +51,17 @@
 
 static char s_stubText[4096] = {0};
 
+/** Report whether the non-Apple stub currently contains nonempty text. */
 bool Clipboard_hasText(void) {
     return s_stubText[0] != '\0';
 }
 
+/** Report that the non-Apple clipboard stub has no image format support. */
 bool Clipboard_hasImage(void) {
     return false;
 }
 
+/** Copy the stub's stored text into the bounded caller buffer and return bytes copied. */
 size_t Clipboard_getText(char *dest, size_t maxBytes) {
     if (dest == nullptr || maxBytes == 0) return 0;
     size_t len = strlen(s_stubText);
@@ -68,6 +71,7 @@ size_t Clipboard_getText(char *dest, size_t maxBytes) {
     return len;
 }
 
+/** Store text in the fixed stub buffer, truncating to its maximum NUL-terminated length. */
 bool Clipboard_setText(const char *text) {
     if (text == nullptr) return false;
     size_t len = strlen(text);
@@ -77,16 +81,19 @@ bool Clipboard_setText(const char *text) {
     return true;
 }
 
+/** Report that image retrieval is unsupported by the non-Apple clipboard stub. */
 bool Clipboard_getImage(void *dest, size_t maxBytes, int32_t *outWidth, int32_t *outHeight) {
     (void) dest; (void) maxBytes; (void) outWidth; (void) outHeight;
     return false;
 }
 
+/** Report that image publication is unsupported by the non-Apple clipboard stub. */
 bool Clipboard_setImage(const void *pixels, int32_t width, int32_t height) {
     (void) pixels; (void) width; (void) height;
     return false;
 }
 
+/** Empty the stub's stored text buffer. */
 void Clipboard_clear(void) {
     s_stubText[0] = '\0';
 }

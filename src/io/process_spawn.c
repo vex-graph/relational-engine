@@ -97,12 +97,14 @@ extern char **environ;
 // io/process_spawn.c — ProcessSpawn port. posix_spawnp launch, WNOHANG
 // reap slices, SIGTERM cancel. No system(), no blocking wait, no threads.
 
+/** Read monotonic time in nanoseconds for bounded child polling. */
 static uint64_t processSpawnNowNs(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (uint64_t) ts.tv_sec * 1000000000ULL + (uint64_t) ts.tv_nsec;
 }
 
+/** Sleep for one short interval between non-blocking child reaps. */
 static void processSpawnSleepSlice(void) {
     struct timespec slice;
     slice.tv_sec = 0;
@@ -110,6 +112,7 @@ static void processSpawnSleepSlice(void) {
     nanosleep(&slice, nullptr);
 }
 
+/** Allocate and initialize an empty fixed-slot child-job table. */
 static ProcessSpawn *processSpawnCreate(uint64_t timeoutMs) {
     ProcessSpawn *self = (ProcessSpawn*) Memory_alloc(TYPE_PROCESS_SPAWN_SINGLETON, sizeof(ProcessSpawn));
     if (!self)
@@ -128,6 +131,7 @@ static ProcessSpawn *processSpawnCreate(uint64_t timeoutMs) {
     return self;
 }
 
+/** Reap each completed child once without blocking and update its slot and live count. */
 static bool processSpawnReapOnce(ProcessSpawn *self) {
     bool allDone = true;
     for (uint32_t i = 0; i < PROCESS_SPAWN_JOBS_MAX; i++) {
@@ -160,21 +164,25 @@ static bool processSpawnReapOnce(ProcessSpawn *self) {
 }
 
 // CONSTRUCTORS
+/** Construct a process-spawn table with a zero default timeout. */
 ProcessSpawn *ProcessSpawn_0(void) {
     return processSpawnCreate(0);
 }
 
+/** Construct a process-spawn table with the supplied default timeout. */
 ProcessSpawn *ProcessSpawn_1(uint64_t timeoutMs) {
     return processSpawnCreate(timeoutMs);
 }
 
 // CORE FUNCTIONS
+/** Release the table allocation; callers must first stop and reap its child jobs. */
 void ProcessSpawn_free(ProcessSpawn *self) {
     if (!self)
         return;
     Memory_free(self);
 }
 
+/** Start argv[0] through posix_spawnp in a free job slot and record its pid and timeout. */
 bool ProcessSpawn_spawn(const char *const *argv, uint64_t timeoutMs,
                         ProcessSpawn *dest) {
     if (!argv || !(*argv) || !dest)
@@ -205,6 +213,7 @@ bool ProcessSpawn_spawn(const char *const *argv, uint64_t timeoutMs,
     return true;
 }
 
+/** Reap child jobs in bounded non-blocking slices; return true only when all jobs are done. */
 bool ProcessSpawn_poll(ProcessSpawn *self, uint64_t budgetNs) {
     if (!self)
         return false;
@@ -225,6 +234,7 @@ bool ProcessSpawn_poll(ProcessSpawn *self, uint64_t budgetNs) {
     }
 }
 
+/** Mark the table cancelled and send SIGTERM to every unfinished tracked child. */
 void ProcessSpawn_cancel(ProcessSpawn *self) {
     if (!self)
         return;
@@ -237,24 +247,28 @@ void ProcessSpawn_cancel(ProcessSpawn *self) {
 }
 
 // SETTERS
+/** Replace the table's mirrored most-recent pid field. */
 void ProcessSpawn_setPid(ProcessSpawn *self, int32_t pid) {
     if (!self)
         return;
     (*self).pid = pid;
 }
 
+/** Replace the table's default timeout value in milliseconds. */
 void ProcessSpawn_setTimeoutMs(ProcessSpawn *self, uint64_t timeoutMs) {
     if (!self)
         return;
     (*self).timeoutMs = timeoutMs;
 }
 
+/** Replace the table's mirrored last exit-code field. */
 void ProcessSpawn_setExitCode(ProcessSpawn *self, int32_t exitCode) {
     if (!self)
         return;
     (*self).exitCode = exitCode;
 }
 
+/** Set or clear the cancellation flag without signaling jobs. */
 void ProcessSpawn_setCancelFlag(ProcessSpawn *self, bool cancelFlag) {
     if (!self)
         return;
@@ -262,36 +276,42 @@ void ProcessSpawn_setCancelFlag(ProcessSpawn *self, bool cancelFlag) {
 }
 
 // GETTERS
+/** Return the most-recent pid field, or zero for a null table. */
 int32_t ProcessSpawn_getPid(const ProcessSpawn *self) {
     if (!self)
         return 0;
     return (*self).pid;
 }
 
+/** Return the default timeout in milliseconds, or zero for a null table. */
 uint64_t ProcessSpawn_getTimeoutMs(const ProcessSpawn *self) {
     if (!self)
         return 0;
     return (*self).timeoutMs;
 }
 
+/** Return the last reaped exit code, or zero for a null table. */
 int32_t ProcessSpawn_getExitCode(const ProcessSpawn *self) {
     if (!self)
         return 0;
     return (*self).exitCode;
 }
 
+/** Return the cancellation state, treating a null table as cancelled. */
 bool ProcessSpawn_isCancelFlag(const ProcessSpawn *self) {
     if (!self)
         return true;
     return (*self).cancelFlag;
 }
 
+/** Return the number of child jobs not yet reaped, or zero for a null table. */
 uint32_t ProcessSpawn_getCount(const ProcessSpawn *self) {
     if (!self)
         return 0;
     return (*self).count;
 }
 
+/** Return a job slot's pid, or zero for a null table or out-of-range slot. */
 int32_t ProcessSpawn_getJobPid(const ProcessSpawn *self, uint32_t i) {
     if (!self)
         return 0;
@@ -301,6 +321,7 @@ int32_t ProcessSpawn_getJobPid(const ProcessSpawn *self, uint32_t i) {
     return (*job).pid;
 }
 
+/** Return a job slot's exit code, or zero for a null table or out-of-range slot. */
 int32_t ProcessSpawn_getJobExitCode(const ProcessSpawn *self, uint32_t i) {
     if (!self)
         return 0;
@@ -310,6 +331,7 @@ int32_t ProcessSpawn_getJobExitCode(const ProcessSpawn *self, uint32_t i) {
     return (*job).exitCode;
 }
 
+/** Return whether a job slot is marked done; invalid table or index defaults to true. */
 bool ProcessSpawn_isJobDone(const ProcessSpawn *self, uint32_t i) {
     if (!self)
         return true;

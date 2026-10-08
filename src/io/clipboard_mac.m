@@ -52,6 +52,7 @@
 
 ;;PLATFORM_EXCLUSIVE("Mac")
 
+/** Report whether the system pasteboard advertises its plain-text format. */
 bool Clipboard_hasText(void) {
     @autoreleasepool {
         NSPasteboard *pb = [NSPasteboard generalPasteboard];
@@ -60,6 +61,7 @@ bool Clipboard_hasText(void) {
     }
 }
 
+/** Report whether the system pasteboard advertises TIFF or PNG image data. */
 bool Clipboard_hasImage(void) {
     @autoreleasepool {
         NSPasteboard *pb = [NSPasteboard generalPasteboard];
@@ -69,6 +71,7 @@ bool Clipboard_hasImage(void) {
     }
 }
 
+/** Copy pasteboard UTF-8 text into the caller buffer, NUL-terminating and truncating to its capacity. */
 size_t Clipboard_getText(char *dest, size_t maxBytes) {
     if (dest == nullptr || maxBytes == 0) {
         return 0;
@@ -97,6 +100,7 @@ size_t Clipboard_getText(char *dest, size_t maxBytes) {
     }
 }
 
+/** Replace pasteboard contents with the supplied UTF-8 text. */
 bool Clipboard_setText(const char *text) {
     if (text == nullptr) {
         return false;
@@ -112,6 +116,7 @@ bool Clipboard_setText(const char *text) {
     }
 }
 
+/** Decode pasteboard TIFF/PNG into caller RGBA storage when it fits, then return dimensions. */
 bool Clipboard_getImage(void *dest, size_t maxBytes, int32_t *outWidth, int32_t *outHeight) {
     if (dest == nullptr || outWidth == nullptr || outHeight == nullptr) {
         return false;
@@ -150,6 +155,7 @@ bool Clipboard_getImage(void *dest, size_t maxBytes, int32_t *outWidth, int32_t 
     }
 }
 
+/** Encode caller-provided RGBA pixels as TIFF and replace pasteboard image contents. */
 bool Clipboard_setImage(const void *pixels, int32_t width, int32_t height) {
     if (pixels == nullptr || width <= 0 || height <= 0) {
         return false;
@@ -188,6 +194,7 @@ bool Clipboard_setImage(const void *pixels, int32_t width, int32_t height) {
     }
 }
 
+/** Clear all items from the system pasteboard. */
 void Clipboard_clear(void) {
     @autoreleasepool {
         NSPasteboard *pb = [NSPasteboard generalPasteboard];

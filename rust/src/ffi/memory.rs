@@ -67,6 +67,7 @@ pub unsafe extern "C" fn re_memory_read(
     0
 }
 
+/// Map a Rust memory error to the stable numeric status used by the C ABI.
 fn status(error: MemoryError) -> u32 {
     match error {
         MemoryError::Allocation | MemoryError::Exhausted => 2,

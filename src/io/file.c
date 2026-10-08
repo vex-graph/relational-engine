@@ -70,6 +70,7 @@
 
 // file.c — File port (Legacy: io/File.java). stdio-backed file handle.
 
+/** Translate File mode flags to stdio fopen modes, preserving existing bytes unless truncation is requested. */
 static FILE *map_open(const char *path, uint32_t mode) {
     bool read = (mode & FILE_MODE_READ) != 0;
     bool write = (mode & (FILE_MODE_WRITE | FILE_MODE_APPEND)) != 0;
@@ -98,6 +99,7 @@ static FILE *map_open(const char *path, uint32_t mode) {
     return fopen(path, read ? "r+b" : "rb+");
 }
 
+/** Open a path using the requested mode flags and create its File in the engine arena. */
 File *File_open(const char *path, uint32_t mode) {
     if (!path)
         return nullptr;
@@ -146,6 +148,7 @@ File *File_open(const char *path, uint32_t mode) {
     return f;
 }
 
+/** Close the OS handle and release the arena-owned File object. */
 bool File_close(File *f) {
     if (!f)
         return false;
@@ -156,6 +159,7 @@ bool File_close(File *f) {
     return true;
 }
 
+/** Read up to max_len bytes at the current cursor, returning bytes read or -1 on error. */
 int64_t File_read(File *f, void *dest, int64_t max_len) {
     if (!f || !(*f).handle || !dest)
         return -1;
@@ -170,6 +174,7 @@ int64_t File_read(File *f, void *dest, int64_t max_len) {
     return (int64_t) n;
 }
 
+/** Write up to len bytes at the current cursor and update tracked position and size. */
 int64_t File_write(File *f, const void *src, int64_t len) {
     if (!f || !(*f).handle || !src)
         return -1;
@@ -186,6 +191,7 @@ int64_t File_write(File *f, const void *src, int64_t len) {
     return (int64_t)n;
 }
 
+/** Seek to an absolute nonnegative byte offset and update the tracked cursor on success. */
 bool File_seek(File *f, int64_t position) {
     if (!f || !(*f).handle || position < 0)
         return false;
@@ -195,6 +201,7 @@ bool File_seek(File *f, int64_t position) {
     return true;
 }
 
+/** Refresh the tracked file size from the open handle, returning -1 on failure. */
 int64_t File_refreshSize(File *f) {
     if (!f || !(*f).handle)
         return -1;
@@ -206,36 +213,44 @@ int64_t File_refreshSize(File *f) {
     return (*f).size;
 }
 
+/** Flush buffered output for an open file handle. */
 bool File_flush(File *f) {
     if (!f || !(*f).handle)
         return false;
     return fflush((*f).handle) == 0;
 }
 
+/** Return the stdio handle borrowed from the File object. */
 FILE *File_handle(const File *f) {
     return (*f).handle;
 }
 
+/** Return the File object's stored path. */
 const char *File_name(const File *f) {
     return (*f).name;
 }
 
+/** Return the object's tracked file size. */
 int64_t File_size(const File *f) {
     return (*f).size;
 }
 
+/** Return the object's tracked cursor position. */
 int64_t File_pos(const File *f) {
     return (*f).position;
 }
 
+/** Return the mode flags supplied when the File was opened. */
 uint32_t File_mode(const File *f) {
     return (*f).mode;
 }
 
+/** Report whether the tracked cursor has reached or passed the tracked file size. */
 bool File_eof(const File *f) {
     return (*f).position >= (*f).size;
 }
 
+/** Return whether stat succeeds for the supplied filesystem path. */
 bool File_exists(const char *path) {
     if (!path)
         return false;
@@ -243,6 +258,7 @@ bool File_exists(const char *path) {
     return stat(path, &st) == 0;
 }
 
+/** Return whether the path exists and identifies a directory. */
 bool File_isDirectory(const char *path) {
     if (!path)
         return false;
@@ -252,6 +268,7 @@ bool File_isDirectory(const char *path) {
     return S_ISDIR(st.st_mode);
 }
 
+/** Create each missing path component with mode 0755, accepting existing directories. */
 bool File_mkdirs(const char *path) {
     if (!path)
         return false;
@@ -273,6 +290,7 @@ bool File_mkdirs(const char *path) {
     return mkdir(buf, 0755) == 0 || errno == EEXIST;
 }
 
+/** Remove a filesystem path using the C remove operation. */
 bool File_delete(const char *path) {
     if (!path)
         return false;

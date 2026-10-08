@@ -17,6 +17,7 @@
 // Per the Cold-Only Reflection Law: resolve once, hold the stable binding.
 enum { NAME_BYTES = 24, SEARCH_FOUND = 0, SEARCH_MISSING = 1, SEARCH_INVALID = 2 };
 
+/** Scan fixed-width name keys in borrowed rows, preserving outIndex unless a match is found. */
 int re_name_search(const uint8_t *source, size_t spanBytes, size_t stride,
                    const uint8_t *key, size_t keyBytes, size_t *outIndex) {
     if (key == nullptr || outIndex == nullptr || keyBytes != NAME_BYTES ||

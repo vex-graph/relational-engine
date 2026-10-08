@@ -80,12 +80,14 @@
 
 static const uint8_t LOG_MAGIC[7] = { 0x41, 0x4E, 0x54, 0x49, 0x4C, 0x4F, 0x47 };
 
+/** Return monotonic time as nanoseconds for event timestamps. */
 static int64_t monotonic_nanos(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (int64_t)ts.tv_sec * 1000000000L + (int64_t)ts.tv_nsec;
 }
 
+/** Encode a 32-bit value in big-endian byte order at the requested offset. */
 static void put_be32(uint8_t *b, size_t off, uint32_t v) {
     b[off] = (uint8_t)(v >> 24);
     b[off + 1] = (uint8_t)(v >> 16);
@@ -93,11 +95,13 @@ static void put_be32(uint8_t *b, size_t off, uint32_t v) {
     b[off + 3] = (uint8_t)v;
 }
 
+/** Encode a 64-bit value in big-endian byte order at the requested offset. */
 static void put_be64(uint8_t *b, size_t off, int64_t v) {
     for (int i = 0; i < 8; i++)
         b[off + (size_t)i] = (uint8_t)((uint64_t)v >> (56 - 8 * i));
 }
 
+/** Write the binary log magic, version, and fixed record-size header. */
 static bool write_header(Log *log) {
     uint8_t header[LOG_HEADER_BYTES];
     memcpy(header, LOG_MAGIC, 7);
@@ -107,6 +111,7 @@ static bool write_header(Log *log) {
     return true;
 }
 
+/** Atomically reserve the next producer slot, returning -1 when the ring is full. */
 static int64_t claim_slot(Log *log) {
     _Atomic int64_t *head = (_Atomic int64_t*) ((*log).arena + LOG_HEAD_OFF);
     _Atomic int64_t *tail = (_Atomic int64_t*) ((*log).arena + LOG_TAIL_OFF);
@@ -123,6 +128,7 @@ static int64_t claim_slot(Log *log) {
     return h;
 }
 
+/** Convert one native ring slot to the on-disk big-endian record representation. */
 static void write_slot(Log *log, const uint8_t *slot) {
     uint8_t rec[LOG_RECORD_BYTES];
     uint32_t kind;
@@ -139,6 +145,7 @@ static void write_slot(Log *log, const uint8_t *slot) {
     FileWriter_write(&(*log).writer, rec, LOG_RECORD_BYTES);
 }
 
+/** Drain consecutive published records from the ring to the file writer. */
 static uint64_t drain_and_write(Log *log) {
     _Atomic int64_t *head = (_Atomic int64_t*) ((*log).arena + LOG_HEAD_OFF);
     _Atomic int64_t *tail = (_Atomic int64_t*) ((*log).arena + LOG_TAIL_OFF);
@@ -162,6 +169,7 @@ static uint64_t drain_and_write(Log *log) {
     return wrote;
 }
 
+/** Writer thread loop: drain records, periodically flush, then drain once on stop. */
 static void *writer_main(void *arg) {
     Log *log = (Log*) arg;
     uint64_t idle = 0;
@@ -189,6 +197,7 @@ static void *writer_main(void *arg) {
     return nullptr;
 }
 
+/** Initialize the bounded record ring, file sink, counters, and writer thread. */
 bool Log_init(Log *log, const char *path, size_t slot_count) {
     if (!log || !path)
         return false;
@@ -233,10 +242,12 @@ bool Log_init(Log *log, const char *path, size_t slot_count) {
     return true;
 }
 
+/** Initialize logging at VexHome's default log path and default ring capacity. */
 bool Log_initDefault(Log *log) {
     return Log_init(log, VexHome_defaultLogPath(), LOG_DEFAULT_SLOT_COUNT);
 }
 
+/** Stop and join the writer, drain remaining records, and release its ring and file sink. */
 void Log_shutdown(Log *log) {
     if (!log)
         return;
@@ -254,35 +265,43 @@ void Log_shutdown(Log *log) {
     (*log).enabled = false;
 }
 
+/** Return whether initialization established a usable log sink. */
 bool Log_isEnabled(const Log *log) {
     return (*log).enabled;
 }
 
+/** Return the runtime append gate state. */
 bool Log_isActive(const Log *log) {
     return (*log).active;
 }
 
+/** Change the append gate when the log sink is enabled. */
 void Log_setActive(Log *log, bool on) {
     if ((*log).enabled)
         (*log).active = on;
 }
 
+/** Return the path stored at initialization. */
 const char *Log_path(const Log *log) {
     return (*log).path;
 }
 
+/** Return the atomic count of records successfully published by producers. */
 uint64_t Log_appended(const Log *log) {
     return atomic_load_explicit(&(*log).appended, memory_order_relaxed);
 }
 
+/** Return the atomic count of records dropped because the ring was full. */
 uint64_t Log_dropped(const Log *log) {
     return atomic_load_explicit(&(*log).dropped, memory_order_relaxed);
 }
 
+/** Return the writer-owned count of records written to the sink. */
 uint64_t Log_written(const Log *log) {
     return (*log).written;
 }
 
+/** Publish a timestamped event and five values, or increment dropped when the ring has no slot. */
 void Log_append(Log *log, int kind, int64_t v0, int64_t v1, int64_t v2,
                 int64_t v3, int64_t v4) {
     if (!log || !(*log).enabled || !(*log).active || !(*log).arena)
@@ -310,6 +329,7 @@ void Log_append(Log *log, int kind, int64_t v0, int64_t v1, int64_t v2,
     atomic_fetch_add_explicit(&(*log).appended, 1, memory_order_relaxed);
 }
 
+/** Append an event kind with all five value fields set to zero. */
 void Log_appendKind(Log *log, int kind) {
     Log_append(log, kind, 0, 0, 0, 0, 0);
 }

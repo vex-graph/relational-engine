@@ -125,6 +125,7 @@
 // Hash-clarification veto over the identity core, fed little-endian (never
 // serialized, but explicit anyway). LSB forced so a stored sugar is never 0:
 // cleared (zeroed) headers always fail verification with no special case.
+/** Compute the nonzero header check word from type id and payload length. */
 static uint32_t header_sugar(uint64_t typeId, uint32_t length) {
     uint32_t hash = 2166136261u;
     for (int i = 0; i < 8; i++) {
@@ -138,6 +139,7 @@ static uint32_t header_sugar(uint64_t typeId, uint32_t length) {
     return hash | 1u;
 }
 
+/** Check a header's stored sugar against its identity and length fields. */
 static bool header_valid(const MemoryHeader *h) {
     return h && (*h).sugar == header_sugar((*h).typeId, (*h).length);
 }
@@ -185,6 +187,7 @@ static SpinLock s_registryLock = SPIN_LOCK_INIT;
 
 // Append an arena pointer, growing the table exponentially. OOM returns false
 // and leaves the registry untouched.
+/** Append an arena to the global free-routing registry, growing the table on demand. */
 static bool registry_push(MemoryArena *a) {
     if (s_registryCount == s_registryCap) {
         size_t newCap = (s_registryCap == 0) ? 8 : s_registryCap * 2;
@@ -199,6 +202,7 @@ static bool registry_push(MemoryArena *a) {
 }
 
 // The default arena occupies slot 0 so free-routing walks always see it.
+/** Ensure the default arena occupies the registry's first slot. */
 static bool registry_ensureDefault(void) {
     if (s_registryCount == 0) return registry_push(&s_default);
     return true;
@@ -225,6 +229,7 @@ static TransientArena s_transient = {
 };
 
 
+/** Select the smallest slab class that can hold a header and payload, or -1 for bump storage. */
 static inline int find_slab(size_t payload_bytes) {
     size_t needed = payload_bytes + sizeof(MemoryHeader);
     if (needed <= 64)   return 0;
@@ -237,6 +242,7 @@ static inline int find_slab(size_t payload_bytes) {
     return -1;
 }
 
+/** Initialize a slab descriptor from its fixed class-size and capacity tables. */
 static void slab_template(SlabClass *slab, uint32_t idx) {
     (*slab).slot_size = s_slabSizes[idx];
     (*slab).capacity = s_slabCaps[idx];
@@ -246,6 +252,7 @@ static void slab_template(SlabClass *slab, uint32_t idx) {
     (*slab).lock = SPIN_LOCK_INIT;
 }
 
+/** Allocate and partition an arena into initialized slab freelists and a bump region. */
 static bool arena_init(MemoryArena *a, size_t totalBytes) {
     if (!a)
         return false;
@@ -294,6 +301,7 @@ static bool arena_init(MemoryArena *a, size_t totalBytes) {
     return true;
 }
 
+/** Allocate a typed payload from a slab, bump region, or malloc fallback. */
 static void *arena_alloc(MemoryArena *a, uint64_t typeId, size_t numBytes) {
     if (!a || !(*a).live)
         return nullptr;
@@ -349,6 +357,7 @@ static void *arena_alloc(MemoryArena *a, uint64_t typeId, size_t numBytes) {
     return (void*) (raw + sizeof(MemoryHeader));
 }
 
+/** Validate an in-arena payload header and recycle its slab slot when applicable. */
 static void arena_free(MemoryArena *a, void *userPtr) {
     if (!a || !userPtr)
         return;
@@ -398,6 +407,7 @@ static void arena_free(MemoryArena *a, void *userPtr) {
     SpinLock_unlock(&(*slab).lock);
 }
 
+/** Reset slab freelists and the bump cursor, invalidating all arena payloads. */
 static void arena_freeAll(MemoryArena *a) {
     if (!a || !(*a).live)
         return;
@@ -430,6 +440,7 @@ static void arena_freeAll(MemoryArena *a) {
 // blocks live outside every range (malloc regions never overlap live ones)
 // and are not reclaimed here — same as before. Registry writes happen at
 // create/destroy (pre-threads); reads are lock-free.
+/** Find the live registered arena whose address range contains a valid payload. */
 static MemoryArena *arena_for(void *userPtr) {
     if (!userPtr)
         return nullptr;
@@ -453,6 +464,7 @@ static MemoryArena *arena_for(void *userPtr) {
     return nullptr;
 }
 
+/** Resolve a validated header only after range-checking transient and registered arenas. */
 static const MemoryHeader *safe_header(const void *userPtr) {
     if (!userPtr)
         return nullptr;
@@ -484,11 +496,13 @@ static const MemoryHeader *safe_header(const void *userPtr) {
     return nullptr;
 }
 
+/** Lazily initialize the default arena with its named default size. */
 static inline void ensure_initialized(void) {
     if (!s_default.live)
         Memory_init(ANTI_ARENA_DEFAULT_SIZE);
 }
 
+/** Initialize and register the default arena; repeated calls succeed without reinitializing it. */
 bool Memory_init(size_t totalBytes) {
     SpinLock_lock(&s_default.initLock);
     if (s_default.live) {
@@ -500,16 +514,19 @@ bool Memory_init(size_t totalBytes) {
     return arena_init(&s_default, totalBytes);
 }
 
+/** Allocate a default-arena payload with a 16-byte self-describing header. */
 void *Memory_alloc(uint64_t typeId, size_t numBytes) {
     ensure_initialized();
     return arena_alloc(&s_default, typeId, numBytes);
 }
 
+/** Return the process-wide default arena, initializing it on first access. */
 MemoryArena *Memory_defaultArena(void) {
     ensure_initialized();
     return &s_default;
 }
 
+/** Allocate a replacement in the default arena, copy the shorter length, and free the old arena block. */
 void *Memory_realloc(void *userPtr, size_t newBytes) {
     if (!userPtr)
         return Memory_alloc(0, newBytes);
@@ -525,6 +542,7 @@ void *Memory_realloc(void *userPtr, size_t newBytes) {
     return next;
 }
 
+/** Route a validated permanent block to its owning arena; transient or invalid pointers are ignored. */
 void Memory_free(void *userPtr) {
     if (!userPtr)
         return;
@@ -545,10 +563,12 @@ void Memory_free(void *userPtr) {
     arena_free(a, userPtr);
 }
 
+/** Reset all allocations in the default arena; dependent users must already be stopped. */
 void Memory_freeAll(void) {
     arena_freeAll(&s_default);
 }
 
+/** Return a validated block's payload length, or zero when the pointer is rejected. */
 size_t Memory_length(void *userPtr) {
     const MemoryHeader *h = safe_header(userPtr);
     if (h)
@@ -556,6 +576,7 @@ size_t Memory_length(void *userPtr) {
     return 0;
 }
 
+/** Return a validated block's type id, or zero when the pointer is rejected. */
 uint64_t Memory_type(void *userPtr) {
     const MemoryHeader *h = safe_header(userPtr);
     if (h)
@@ -563,6 +584,7 @@ uint64_t Memory_type(void *userPtr) {
     return 0;
 }
 
+/** Return whether both validated blocks carry the same type id. */
 bool Memory_similar(const void *a, const void *b) {
     if (!a || !b)
         return false;
@@ -575,6 +597,7 @@ bool Memory_similar(const void *a, const void *b) {
     return (*ha).typeId == (*hb).typeId;
 }
 
+/** Initialize the transient bump arena once, rounding capacity up to 16-byte alignment. */
 bool Memory_initTransient(size_t capacity) {
     if (capacity > SIZE_MAX - 15u)
         return false;
@@ -601,11 +624,13 @@ bool Memory_initTransient(size_t capacity) {
     return true;
 }
 
+/** Lazily initialize the transient arena using its named default capacity. */
 static inline void ensure_transient_initialized(void) {
     if (!s_transient.live)
         Memory_initTransient(ANTI_TRANSIENT_DEFAULT_SIZE);
 }
 
+/** Allocate an aligned transient payload, rejecting length, arithmetic, and capacity overflow. */
 void *Transient_alloc(uint64_t typeId, size_t numBytes) {
     // The header length is uint32_t. Reject before rounding or lazy allocation;
     // scratch admission is silent on this hot path, like other capacity rejects.
@@ -636,6 +661,7 @@ void *Transient_alloc(uint64_t typeId, size_t numBytes) {
     return (void*) (slot + sizeof(MemoryHeader));
 }
 
+/** Rewind the transient bump cursor and advance its generation, invalidating prior borrows. */
 void Transient_reset(void) {
     if (!s_transient.live)
         return;
@@ -655,6 +681,7 @@ void Transient_reset(void) {
 #endif
 }
 
+/** Return whether ptr lies in the currently used payload range of the transient arena. */
 bool Transient_contains(const void *ptr) {
     if (!ptr || !s_transient.live || !s_transient.buffer)
         return false;
@@ -662,16 +689,19 @@ bool Transient_contains(const void *ptr) {
     return (p >= s_transient.buffer + sizeof(MemoryHeader) && p < s_transient.buffer + s_transient.bumpOffset);
 }
 
+/** Return the current transient allocation generation. */
 uint32_t Transient_getGeneration(void) {
     return s_transient.generation;
 }
 
 #if defined(DEBUG_BORROW_CHECK)
+/** Return the transient arena backing buffer for debug-only borrow diagnostics. */
 const uint8_t *Transient_getBuffer(void) {
     return s_transient.buffer;
 }
 #endif
 
+/** Classify a pointer as transient, permanent, or unknown using registered address ranges. */
 MemoryLifetime Memory_getLifetime(const void *ptr) {
     if (!ptr)
         return MEMORY_LIFETIME_UNKNOWN;
@@ -683,10 +713,12 @@ MemoryLifetime Memory_getLifetime(const void *ptr) {
 }
 
 
+/** Enumerate default-arena live slab blocks matching typeId, returning total matches found. */
 size_t Memory_findAll(uint64_t typeId, void **outArray, size_t maxCount) {
     return MemoryArena_findAll(&s_default, typeId, outArray, maxCount);
 }
 
+/** Allocate, initialize, and register an independent arena with the requested capacity. */
 MemoryArena *MemoryArena_create(size_t totalBytes) {
     MemoryArena *a = (MemoryArena*) calloc(1, sizeof(MemoryArena));
     if (!a)
@@ -706,6 +738,7 @@ MemoryArena *MemoryArena_create(size_t totalBytes) {
     return a;
 }
 
+/** Unregister and destroy a non-default arena and its backing storage. */
 void MemoryArena_destroy(MemoryArena *a) {
     if (!a || a == &s_default)
         return;
@@ -723,12 +756,14 @@ void MemoryArena_destroy(MemoryArena *a) {
     free(a);
 }
 
+/** Allocate a typed payload from the specified arena. */
 void *MemoryArena_alloc(MemoryArena *a, uint64_t typeId, size_t numBytes) {
     if (!a)
         return nullptr;
     return arena_alloc(a, typeId, numBytes);
 }
 
+/** Allocate replacement storage in a, copy bytes from userPtr, and route old-block release by owner. */
 void *MemoryArena_realloc(MemoryArena *a, void *userPtr, size_t newBytes) {
     if (!a)
         return nullptr;
@@ -746,18 +781,21 @@ void *MemoryArena_realloc(MemoryArena *a, void *userPtr, size_t newBytes) {
     return next;
 }
 
+/** Attempt to recycle a validated payload within the specified arena. */
 void MemoryArena_free(MemoryArena *a, void *userPtr) {
     if (!a)
         return;
     arena_free(a, userPtr);
 }
 
+/** Reset every slab and bump allocation in the specified arena. */
 void MemoryArena_freeAll(MemoryArena *a) {
     if (!a)
         return;
     arena_freeAll(a);
 }
 
+/** Enumerate live slab blocks in an arena matching typeId, returning total matches found. */
 size_t MemoryArena_findAll(MemoryArena *a, uint64_t typeId, void **outArray, size_t maxCount) {
     size_t count = 0;
     if (!a || !(*a).live)
@@ -784,6 +822,7 @@ size_t MemoryArena_findAll(MemoryArena *a, uint64_t typeId, void **outArray, siz
     return count;
 }
 
+/** Return occupied slab bytes plus the arena's current bump offset. */
 size_t MemoryArena_activeBytes(MemoryArena *a) {
     size_t total = 0;
     if (!a || !(*a).live)
@@ -800,6 +839,7 @@ size_t MemoryArena_activeBytes(MemoryArena *a) {
     return total;
 }
 
+/** Return the backing master-arena capacity, or zero for a null arena. */
 size_t MemoryArena_capacity(MemoryArena *a) {
     if (!a)
         return 0;

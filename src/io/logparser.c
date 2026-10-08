@@ -50,11 +50,13 @@
 
 static const uint8_t LOGPARSER_MAGIC[7] = { 0x41, 0x4E, 0x54, 0x49, 0x4C, 0x4F, 0x47 };
 
+/** Decode a 32-bit big-endian integer from four input bytes. */
 static uint32_t read_be32(const uint8_t *b) {
     return ((uint32_t)b[0] << 24) | ((uint32_t)b[1] << 16)
         | ((uint32_t)b[2] << 8) | (uint32_t)b[3];
 }
 
+/** Decode a 64-bit big-endian integer from eight input bytes. */
 static int64_t read_be64(const uint8_t *b) {
     uint64_t v = 0;
     for (int i = 0; i < 8; i++)
@@ -62,6 +64,7 @@ static int64_t read_be64(const uint8_t *b) {
     return (int64_t)v;
 }
 
+/** Validate the format magic, version, and expected fixed record size. */
 static bool is_log_header(const uint8_t *h) {
     for (int i = 0; i < 7; i++)
         if (h[i] != LOGPARSER_MAGIC[i])
@@ -69,6 +72,7 @@ static bool is_log_header(const uint8_t *h) {
     return h[7] == 0x01 && read_be32(h + 8) == LOGPARSER_RECORD_BYTES;
 }
 
+/** Open a path and determine whether its leading bytes form a supported log header. */
 bool LogParser_isLogFile(const char *path) {
     File *f = File_open(path, FILE_MODE_READ);
     if (!f)
@@ -80,6 +84,7 @@ bool LogParser_isLogFile(const char *path) {
     return ok;
 }
 
+/** Return the number of complete records in a valid log, or -1 when its header cannot be read. */
 int64_t LogParser_count(const char *path) {
     File *f = File_open(path, FILE_MODE_READ);
     if (!f)
@@ -99,6 +104,7 @@ int64_t LogParser_count(const char *path) {
     return (size - LOGPARSER_HEADER_BYTES) / LOGPARSER_RECORD_BYTES;
 }
 
+/** Stream complete decoded records to the callback and return the number delivered. */
 int64_t LogParser_parse(const char *path, LogRecordFn handler, void *userdata) {
     if (!handler)
         return -1;
@@ -128,6 +134,7 @@ int64_t LogParser_parse(const char *path, LogRecordFn handler, void *userdata) {
     return count;
 }
 
+/** Format a record's relative timestamp, event name, and five values into the caller buffer. */
 int LogParser_formatRecord(char *out, size_t out_cap, int kind, int64_t ts,
                            int64_t base_ts, const char *name,
                            int64_t v0, int64_t v1, int64_t v2,
@@ -149,6 +156,7 @@ int LogParser_formatRecord(char *out, size_t out_cap, int kind, int64_t ts,
     return n;
 }
 
+/** Return the registered event name or a static kind#N fallback string. */
 const char *LogParser_kindName(int kind) {
     switch (kind) {
         case 1:  return "produce";

@@ -22,17 +22,21 @@ pub struct VariableRegistry {
 }
 
 impl VariableRegistry {
+    /// Create an empty registry with the requested fixed rows-per-chunk geometry.
     pub fn new(rows_per_chunk: usize) -> Result<Self, StorageError> {
         Ok(Self { slots: ChunkedList::new(rows_per_chunk)? })
     }
+    /// Create an empty registry using the chunk list's named default geometry.
     pub fn zero() -> Result<Self, StorageError> { Ok(Self { slots: ChunkedList::zero()? }) }
 
+    /// Add a validated unique name and borrowed opaque value pointer; duplicates leave the registry unchanged.
     pub fn add(&mut self, name: &[u8], pointer: *const u8) -> Result<usize, StorageError> {
         let slot = VariableSlot::new(name, pointer)?;
         if self.find(name)?.is_some() { return Err(StorageError::Duplicate); }
         self.slots.add(slot)
     }
 
+    /// Resolve a validated name with the native span-search routine; return `None` when absent.
     pub fn find(&self, name: &[u8]) -> Result<Option<usize>, StorageError> {
         // Cold name rendezvous per the Cold-Only Reflection Law; hot consumers
         // resolve once and borrow the stable row/value instead of scanning again.
@@ -55,16 +59,22 @@ impl VariableRegistry {
         Ok(None)
     }
 
+    /// Borrow a slot by stable append-only index, or return `None` when out of range.
     pub fn get(&self, index: usize) -> Option<&VariableSlot> { self.slots.get(index) }
+    /// Replace a slot's borrowed pointer; reject invalid indices without changing other slots.
     pub fn set_pointer(&mut self, index: usize, pointer: *const u8) -> Result<(), StorageError> {
         self.slots.get_mut(index).ok_or(StorageError::Bounds)?.set_pointer(pointer);
         Ok(())
     }
+    /// Return the number of registered slots.
     pub fn len(&self) -> usize { self.slots.len() }
+    /// Return whether no slots are registered.
     pub fn is_empty(&self) -> bool { self.slots.is_empty() }
+    /// Write a bounded value summary and report whether the destination was truncated.
     pub fn to_string(&self, dest: &mut [u8], out_truncated: &mut bool) -> bool {
         projection::write(format!("VariableRegistry(len={})", self.len()), dest, out_truncated)
     }
+    /// Write a bounded one-level field summary and report destination truncation.
     pub fn to_string_struct(&self, dest: &mut [u8], out_truncated: &mut bool) -> bool {
         projection::write(format!("VariableRegistry {{ slots: ChunkedList(len={}) }}", self.len()), dest, out_truncated)
     }

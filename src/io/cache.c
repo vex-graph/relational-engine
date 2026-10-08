@@ -68,12 +68,14 @@ struct Cache {
     char subsystem[64];
 };
 
+/** Return wall-clock time in milliseconds for cache TTL metadata. */
 static uint64_t current_time_ms(void) {
     struct timeval tv;
     gettimeofday(&tv, nullptr);
     return ((uint64_t) tv.tv_sec * 1000ULL) + ((uint64_t) tv.tv_usec / 1000ULL);
 }
 
+/** Hash a cache key and build its payload and metadata paths below the cache directory. */
 static void compute_key_paths(
     const Cache *cache,
     const char *key,
@@ -86,6 +88,7 @@ static void compute_key_paths(
     snprintf(out_meta, 512, "%s/%s.meta", (*cache).dir_path, hash);
 }
 
+/** Read the cached key hash, creation time, TTL, and content size from a metadata file. */
 static bool read_meta(const char *meta_path, CacheEntryMeta *meta_out) {
     FILE *f = fopen(meta_path, "r");
     if (!f) {
@@ -103,6 +106,7 @@ static bool read_meta(const char *meta_path, CacheEntryMeta *meta_out) {
     return true;
 }
 
+/** Write the cache entry metadata fields to its sidecar file. */
 static bool write_meta(const char *meta_path, const CacheEntryMeta *meta) {
     FILE *f = fopen(meta_path, "w");
     if (!f) {
@@ -117,6 +121,7 @@ static bool write_meta(const char *meta_path, const CacheEntryMeta *meta) {
     return true;
 }
 
+/** Open a cache rooted in the VexHome cache directory for a subsystem name. */
 bool Cache_open(const char *subsystem, Cache **cache_out) {
     if (!cache_out) {
         return false;
@@ -143,12 +148,14 @@ bool Cache_open(const char *subsystem, Cache **cache_out) {
     return true;
 }
 
+/** Release the descriptor returned by Cache_open; null is accepted. */
 void Cache_close(Cache *cache) {
     if (cache) {
         free(cache);
     }
 }
 
+/** Check whether a keyed payload exists and remove it when its readable TTL is expired. */
 bool Cache_has(const Cache *cache, const char *key) {
     if (!cache || !key) {
         return false;
@@ -179,6 +186,7 @@ bool Cache_has(const Cache *cache, const char *key) {
     return true;
 }
 
+/** Copy the existing, non-expired payload path into the caller's bounded buffer. */
 bool Cache_get_path(const Cache *cache, const char *key, char *path_out, size_t cap) {
     if (!cache || !key || !path_out || cap == 0) {
         return false;
@@ -202,6 +210,7 @@ bool Cache_get_path(const Cache *cache, const char *key, char *path_out, size_t 
     return true;
 }
 
+/** Allocate and return a NUL-terminated copy of a cached payload and its byte length. */
 bool Cache_get_data(const Cache *cache, const char *key, void **data_out, size_t *size_out) {
     if (!cache || !key || !data_out || !size_out) {
         return false;
@@ -243,6 +252,7 @@ bool Cache_get_data(const Cache *cache, const char *key, void **data_out, size_t
     return true;
 }
 
+/** Atomically replace a key's payload, then write its timestamp, TTL, and size metadata. */
 bool Cache_put_data(Cache *cache, const char *key, const void *data, size_t size, uint64_t ttl_sec) {
     if (!cache || !key || !data) {
         return false;
@@ -282,6 +292,7 @@ bool Cache_put_data(Cache *cache, const char *key, const void *data, size_t size
     return write_meta(meta_path, &meta);
 }
 
+/** Read a source file and store its bytes under a key with the requested TTL. */
 bool Cache_put_file(Cache *cache, const char *key, const char *source_path, uint64_t ttl_sec) {
     if (!cache || !key || !source_path) {
         return false;
@@ -318,6 +329,7 @@ bool Cache_put_file(Cache *cache, const char *key, const char *source_path, uint
     return ok;
 }
 
+/** Unlink the payload and metadata files associated with a key. */
 bool Cache_evict(Cache *cache, const char *key) {
     if (!cache || !key) {
         return false;
@@ -332,6 +344,7 @@ bool Cache_evict(Cache *cache, const char *key) {
     return true;
 }
 
+/** Remove cache-directory entries except the preserved dictionary.ini index. */
 bool Cache_clear(Cache *cache) {
     if (!cache) {
         return false;
@@ -358,6 +371,7 @@ bool Cache_clear(Cache *cache) {
     return true;
 }
 
+/** Return the cache directory path borrowed from the descriptor, or nullptr. */
 const char *Cache_get_dir(const Cache *cache) {
     return cache ? (*cache).dir_path : nullptr;
 }

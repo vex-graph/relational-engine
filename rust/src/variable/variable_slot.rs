@@ -26,6 +26,7 @@ const _: () = assert!(std::mem::offset_of!(VariableSlot, pointer) == 24);
 const _: () = assert!(std::mem::size_of::<*const u8>() == 8);
 
 impl VariableSlot {
+    /// Construct a slot after validating and folding its name; the value pointer is borrowed and opaque.
     pub fn new(name: &[u8], pointer: *const u8) -> Result<Self, StorageError> {
         let mut value = Self::zero();
         value.set_name(name)?;
@@ -33,8 +34,10 @@ impl VariableSlot {
         Ok(value)
     }
 
+    /// Return an unnamed slot with a null value pointer.
     pub fn zero() -> Self { Self { name: [0; VARIABLE_NAME_BYTES], pointer: std::ptr::null() } }
 
+    /// Validate and lowercase a segmented ASCII name; on rejection, preserve the previous name.
     pub fn set_name(&mut self, name: &[u8]) -> Result<(), StorageError> {
         if name.is_empty() || name.len() > VARIABLE_NAME_MAX { return Err(StorageError::InvalidName); }
         let mut folded = [0; VARIABLE_NAME_BYTES];
@@ -57,18 +60,25 @@ impl VariableSlot {
         Ok(())
     }
 
+    /// Borrow the name bytes without its trailing NUL padding.
     pub fn get_name(&self) -> &[u8] {
         let length = self.name.iter().position(|byte| *byte == 0).unwrap_or(VARIABLE_NAME_BYTES);
         &self.name[..length]
     }
+    /// Borrow the complete fixed-width, NUL-padded name storage.
     pub fn get_name_bytes(&self) -> &[u8; VARIABLE_NAME_BYTES] { &self.name }
+    /// Store a borrowed opaque value pointer without dereferencing or taking ownership of it.
     pub fn set_pointer(&mut self, pointer: *const u8) { self.pointer = pointer; }
+    /// Return the borrowed opaque value pointer without validating its lifetime or type.
     pub fn get_pointer(&self) -> *const u8 { self.pointer }
+    /// Return whether the slot has no name and is therefore unbound.
     pub fn is_empty(&self) -> bool { self.name[0] == 0 }
 
+    /// Write a bounded value summary and report whether the destination was truncated.
     pub fn to_string(&self, dest: &mut [u8], out_truncated: &mut bool) -> bool {
         projection::write(format!("VariableSlot(\"{}\", {:p})", String::from_utf8_lossy(self.get_name()), self.pointer), dest, out_truncated)
     }
+    /// Write a bounded one-level field summary and report destination truncation.
     pub fn to_string_struct(&self, dest: &mut [u8], out_truncated: &mut bool) -> bool {
         projection::write(format!("VariableSlot {{ name: \"{}\", pointer: {:p} }}", String::from_utf8_lossy(self.get_name()), self.pointer), dest, out_truncated)
     }

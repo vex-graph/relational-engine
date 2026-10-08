@@ -15,10 +15,12 @@ use super::{block::Block, value::Value};
 pub struct Memory { blocks: Vec<Block>, next_id: u64 }
 
 impl Default for Memory {
+    /// Create the same empty store as `Memory::new`.
     fn default() -> Self { Self::new() }
 }
 
 impl Memory {
+    /// Create an empty store with the first handle reserved for subsequent insertion.
     pub fn new() -> Self { Self { blocks: Vec::new(), next_id: 1 } }
 
     /// Copy Bytes, including embedded NUL. Empty blocks are valid.
@@ -29,6 +31,7 @@ impl Memory {
         self.insert(Value::Bytes(bytes.into_boxed_slice()))
     }
 
+    /// Assign a fresh store-local handle and append a value, preserving state on failure.
     fn insert(&mut self, value: Value) -> Result<u64, MemoryError> {
         let next = self.next_id.checked_add(1).ok_or(MemoryError::Exhausted)?;
         self.blocks.try_reserve(1).map_err(|_| MemoryError::Allocation)?;
@@ -46,19 +49,23 @@ impl Memory {
         }
     }
 
+    /// Resolve a store-local handle to its internal value or return UnknownHandle.
     fn value(&self, id: u64) -> Result<&Value, MemoryError> {
         self.blocks.iter().find(|block| block.id == id)
             .map(|block| &block.value).ok_or(MemoryError::UnknownHandle)
     }
 
+    /// Read one byte from a byte block, rejecting wrong-kind, unknown, or out-of-range handles.
     pub fn get_byte(&self, id: u64, index: usize) -> Result<u8, MemoryError> {
         self.get(id)?.get(index).copied().ok_or(MemoryError::Bounds)
     }
 
+    /// Register an atomic byte cell and return its store-local handle.
     pub fn new_atomic_byte(&mut self, value: u8) -> Result<u64, MemoryError> {
         self.insert(Value::AtomicByte(AtomicU8::new(value)))
     }
 
+    /// Acquire-load an atomic byte cell by handle; reject unknown handles and other value kinds.
     pub fn get_atomic_byte(&self, id: u64) -> Result<u8, MemoryError> {
         match self.value(id)? {
             Value::AtomicByte(value) => Ok(value.load(Ordering::Acquire)),
@@ -66,6 +73,7 @@ impl Memory {
         }
     }
 
+    /// Release-store an atomic byte cell by handle; reject unknown handles and other value kinds.
     pub fn set_atomic_byte(&self, id: u64, value: u8) -> Result<(), MemoryError> {
         match self.value(id)? {
             Value::AtomicByte(cell) => { cell.store(value, Ordering::Release); Ok(()) }
@@ -73,10 +81,12 @@ impl Memory {
         }
     }
 
+    /// Create an atomic byte-string cell with a fixed retained-snapshot budget.
     pub fn new_atomic_string(&mut self, bytes: &[u8], retention_limit: usize) -> Result<u64, MemoryError> {
         self.insert(Value::AtomicString(AtomicString::new(bytes, retention_limit)?))
     }
 
+    /// Borrow the currently published byte-string snapshot for this handle.
     pub fn get_atomic_string(&self, id: u64) -> Result<&[u8], MemoryError> {
         match self.value(id)? {
             Value::AtomicString(value) => Ok(value.get()),
@@ -84,6 +94,7 @@ impl Memory {
         }
     }
 
+    /// Publish a new immutable snapshot, returning an error if its budget or writer lock rejects it.
     pub fn set_atomic_string(&self, id: u64, bytes: &[u8]) -> Result<(), MemoryError> {
         match self.value(id)? {
             Value::AtomicString(value) => value.set(bytes),
@@ -91,6 +102,7 @@ impl Memory {
         }
     }
 
+    /// Remove a block handle; the handle becomes unknown and is not reused.
     pub fn release(&mut self, id: u64) -> Result<(), MemoryError> {
         let index = self.blocks.iter().position(|block| block.id == id)
             .ok_or(MemoryError::UnknownHandle)?;
@@ -100,6 +112,8 @@ impl Memory {
 
     /// Invalidate all handles; do not reset the identity counter.
     pub fn clear(&mut self) { self.blocks.clear(); }
+    /// Return the number of currently registered blocks.
     pub fn len(&self) -> usize { self.blocks.len() }
+    /// Return whether the store has no registered blocks.
     pub fn is_empty(&self) -> bool { self.blocks.is_empty() }
 }

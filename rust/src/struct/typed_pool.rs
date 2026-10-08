@@ -19,13 +19,16 @@ pub struct TypedPool<T> {
 }
 
 impl<T> TypedPool<T> {
+    /// Create an empty typed pool with validated, fixed row geometry for each lazy chunk.
     pub fn new(rows_per_chunk: usize) -> Result<Self, StorageError> {
         TypedChunk::<T>::validate_geometry(rows_per_chunk)?;
         Ok(Self { chunks: Vec::new(), rows_per_chunk, len: 0 })
     }
 
+    /// Create an empty typed pool using the named default rows-per-chunk value.
     pub fn zero() -> Result<Self, StorageError> { Self::new(TYPED_CHUNK_ROWS_DEFAULT) }
 
+    /// Insert into an available slot or a newly allocated chunk and return its reusable pool-local index.
     pub fn add(&mut self, value: T) -> Result<usize, StorageError> {
         let next_len = self.len.checked_add(1).ok_or(StorageError::Capacity)?;
         // Reuse all allocated holes before allocating another chunk.
@@ -52,6 +55,7 @@ impl<T> TypedPool<T> {
         Ok(index)
     }
 
+    /// Remove a live value and return ownership to the caller; the vacant index may later be reused.
     pub fn remove(&mut self, index: usize) -> Result<T, StorageError> {
         let chunk = self.chunks.get_mut(index / self.rows_per_chunk)
             .and_then(Option::as_mut).ok_or(StorageError::Bounds)?;
@@ -60,10 +64,12 @@ impl<T> TypedPool<T> {
         Ok(value)
     }
 
+    /// Borrow a live value by pool-local index, or return `None` when absent.
     pub fn get(&self, index: usize) -> Option<&T> {
         self.chunks.get(index / self.rows_per_chunk)?.as_ref()?.get(index % self.rows_per_chunk)
     }
 
+    /// Mutably borrow a live value by pool-local index, or return `None` when absent.
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         self.chunks.get_mut(index / self.rows_per_chunk)?.as_mut()?.get_mut(index % self.rows_per_chunk)
     }
@@ -80,15 +86,21 @@ impl<T> TypedPool<T> {
         released
     }
 
+    /// Return the number of allocated chunks, excluding released empty directory entries.
     pub fn get_chunk_count(&self) -> usize { self.chunks.iter().filter(|entry| entry.is_some()).count() }
+    /// Return the fixed row capacity of each allocated chunk.
     pub fn get_rows_per_chunk(&self) -> usize { self.rows_per_chunk }
+    /// Return the number of live values in the pool.
     pub fn len(&self) -> usize { self.len }
+    /// Return whether the pool contains no live values.
     pub fn is_empty(&self) -> bool { self.len == 0 }
 
+    /// Write a bounded value summary and report whether the destination was truncated.
     pub fn to_string(&self, dest: &mut [u8], out_truncated: &mut bool) -> bool {
         projection::write(format!("TypedPool(len={}, chunks={})", self.len, self.get_chunk_count()), dest, out_truncated)
     }
 
+    /// Write a bounded one-level field summary and report destination truncation.
     pub fn to_string_struct(&self, dest: &mut [u8], out_truncated: &mut bool) -> bool {
         projection::write(format!("TypedPool {{ chunks: [{} directory entries, {} allocated], rows_per_chunk: {}, len: {} }}",
             self.chunks.len(), self.get_chunk_count(), self.rows_per_chunk, self.len), dest, out_truncated)
