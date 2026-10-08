@@ -1,4 +1,5 @@
 #include "io/cache.h"
+// Production R2 I/O owner: Relational Engine; existing Cache ABI preserved.
 
 #include <dirent.h>
 #include <errno.h>
@@ -69,7 +70,7 @@ struct Cache {
 
 static uint64_t current_time_ms(void) {
     struct timeval tv;
-    gettimeofday(&tv, NULL);
+    gettimeofday(&tv, nullptr);
     return ((uint64_t) tv.tv_sec * 1000ULL) + ((uint64_t) tv.tv_usec / 1000ULL);
 }
 
@@ -120,7 +121,7 @@ bool Cache_open(const char *subsystem, Cache **cache_out) {
     if (!cache_out) {
         return false;
     }
-    *cache_out = NULL;
+    *cache_out = nullptr;
 
     const char *sub = subsystem ? subsystem : "default";
     VexHome_cacheEnsure(sub);
@@ -205,7 +206,7 @@ bool Cache_get_data(const Cache *cache, const char *key, void **data_out, size_t
     if (!cache || !key || !data_out || !size_out) {
         return false;
     }
-    *data_out = NULL;
+    *data_out = nullptr;
     *size_out = 0;
 
     char bin_path[512];
@@ -341,10 +342,10 @@ bool Cache_clear(Cache *cache) {
         return false;
     }
 
-    struct dirent *entry = NULL;
+    struct dirent *entry = nullptr;
     char filepath[1024];
 
-    while ((entry = readdir(d)) != NULL) {
+    while ((entry = readdir(d)) != nullptr) {
         const char *name = (*entry).d_name;
         if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0 || strcmp(name, "dictionary.ini") == 0) {
             continue;
@@ -358,5 +359,5 @@ bool Cache_clear(Cache *cache) {
 }
 
 const char *Cache_get_dir(const Cache *cache) {
-    return cache ? (*cache).dir_path : NULL;
+    return cache ? (*cache).dir_path : nullptr;
 }
