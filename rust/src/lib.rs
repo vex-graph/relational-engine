@@ -22,8 +22,10 @@ pub use primitives::string;
 pub use nio::mem::Memory;
 pub use nio::memory_error::MemoryError;
 pub use nio::chunk::Chunk;
+pub use nio::typed_chunk::TypedChunk;
 pub use nio::storage_error::StorageError;
 pub use r#struct::chunked_list::ChunkedList;
+pub use r#struct::typed_pool::TypedPool;
 pub use variable::variable_slot::VariableSlot;
 pub use variable::variable_registry::VariableRegistry;
 
