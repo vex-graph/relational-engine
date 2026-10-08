@@ -13,9 +13,12 @@ allocation/storage, stable row chunks, variable bindings and native C search
 over Rust-owned spans. Production engine code includes no consumer/host headers;
 imported C comparison files do not prove standalone runtime dependency closure.
 
-Migration is staged: existing Vexspoke memory/container ABI and its default
-allocator remain until explicit migration and owner proof. R3 may borrow either
-R2 public contract; this permission is not an implemented dependency. R1 owns
+Production IO/NIO ownership has migrated: the default allocator and file/cache/
+log/transport implementations now live in this engine's `src/nio` and `src/io`.
+Vexspoke contains no copies. Canonical includes and the default workspace build
+resolve this engine-owned C ABI. Native allocation semantics and 16-byte headers
+are preserved, not rewritten into Rust. Broader Rust/container migration remains
+staged. R3 may borrow either R2 public contract. R1 owns
 lifetimes/residency and excludes active users before destruction. GPU shaders,
 dispatch, capabilities and synchronization remain Graphvex R3. No C/Rust
 atomic-layout compatibility or automatic record-schema migration is assumed.
@@ -36,13 +39,15 @@ stable row allocations; `VariableSlot` is a 32-byte `repr(C)` name/value record
 (`[u8; 24]` plus a borrowed value pointer), not Vexspoke StringSlot's intrusive
 self-pointer layout. `VariableRegistry` is exclusively mutated and append-only;
 native `re_name_search` searches initialized name bytes without reading value
-pointers. Proof and limits live in the owner suite. Imported C reference files
-remain comparison material.
+pointers. Proof and limits live in the owner suite. Imported reflection/relational
+files remain comparison material; migrated native IO/NIO is production code.
 
-- `src/`: preserved C23 reference/scratchpad, imported from Vexspoke.
-  `nio/`, `io/`, `relational/`, and `reflection/` are comparison material, not a claim
-  that every imported utility belongs in the final storage engine.
-- `rust/`: Cargo-recognized Rust scratchpad for the future storage manager.
+- `src/nio`, `src/io`: migrated production native C allocation, scratch, filesystem,
+  cache, logging and bounded transport/job APIs. The macOS clipboard adapter is
+  engine-owned too. Vexspoke supplies CPU-only spin/crypto/annotation/type contracts.
+- `src/relational`, `src/reflection`: preserved C comparison material, never part
+  of the production native target or a source of shadow consumer headers.
+- `rust`: Cargo-recognized Rust scratchpad for the future storage manager.
   A learning backend now owns byte blocks and exposes a standalone C copy ABI;
   it is not the Vexspoke allocator or a production storage manager.
 - Owner and tooling tests live in the independent workspace `../../../tests/relational-engine`.
@@ -65,14 +70,14 @@ and inlay hints. Targets are excluded from the default build. This file is
 not the release build or a new build-system dependency; no Cargo invocation,
 dependency downloads, linking or application runner is wired into it.
 
-An optional `VEXSPOKE_SOURCE_DIR` points to a local Vexspoke `src/` checkout
+An optional `VEXSPOKE_SOURCE_DIR` points to a local Vexspoke `src` checkout
 for remaining header references. Missing headers remain real IDE errors;
 no fake declarations are generated. `src/nio/mem.h` is now present locally.
-The metadata has four imported reference object targets plus an engine-owned
-native-search target. Imported reference targets use the supplied Vexspoke
-include directory; production Cargo wiring compiles engine search only, not those
-references. Metadata compilation is not runtime proof or dependency closure for
-the imported C comparison files.
+Production IDE targets are `engine_nio`, `engine_io` (including ObjC ARC clipboard)
+and `engine_search`; `reference_relational`/`reference_reflection` are reference-only.
+Native IO/NIO borrows the supplied Vexspoke CPU-only include
+directory. Cargo compiles native name search for Rust spans; the workspace build
+compiles migrated native IO/NIO. Metadata compilation is not runtime proof.
 
 Rust analysis requires CLion's Rust support and `rust/Cargo.toml`; CMake
 does not provide Rust semantic analysis. Open/attach that Cargo package if
@@ -85,8 +90,10 @@ standalone b installation:
 b build cargo rust
 ```
 
-That builds only the Rust learning backend. It does not build the C reference
-or prove the engine. No b configuration selects the CMake adapter.
+That builds only the Rust learning backend. The integrated production native
+entry is `./tools/b build relational_engine` from the workspace root, with the
+same engine dependency supplied to ordinary Vexspoke/Graphvex/Darling builds.
+No b configuration selects the CMake adapter.
 
 ## Verification and known gaps
 
@@ -95,20 +102,27 @@ for layout, mixed-ignore behavior,
 CMake metadata generation and a warnings-denied Cargo scaffold check.
 These are tooling checks, not behavioral proof for the imported C classes.
 The separate Rust suite exercises byte ownership, atomic byte/string publication
-and an opt-in Vexspoke extern handshake through the standalone C ABI. The stable
-row slice adds nine registered Rust owner targets (eleven test cases in each
+and a separate engine extern handshake through the standalone C ABI. The stable
+row slice has eleven registered Rust owner targets (sixteen test cases in each
 debug/release run), real C registry/native-search clients, C-client ASan/UBSan,
 exact invalid-span diagnostics and intended arity/type/borrow compile failures.
 See the current checklist for executed commands and hashes, not a remembered
 green. The registry C API exports `re_variables_new/drop/add/find/slot/set_pointer`
 (each with the `re_variables_` prefix), with read-only borrowed slot views and
 caller exclusion around rebinding/destruction. It owns labels, never their values.
-C comparison dependency closure, C/Rust allocator equivalence, general zero-copy storage,
+C comparison dependency closure, Rust/native allocator equivalence, general zero-copy storage,
 complete concurrency/fault coverage, performance, automatic record schema
 migration, live Hotcwap reload integration and Windows execution remain unproved.
 
 Universal architecture and proof follow the linked constitution in
-`CONTRIBUTING.md` and `relational-engine-preferences.md`. The engine remains an
-optional backend, not a replacement for Vexspoke's current allocator. Engine
+`CONTRIBUTING.md` and `relational-engine-preferences.md`. The engine is the
+production native IO/NIO owner; its Rust typed pools are a separate API. Engine
 code/storage remain resident across consumer reloads; value replacement is not
 automatic record schema migration.
+
+Run `python3 tests/relational-engine/native_run.py` for strict optimized native
+owners and ASan/UBSan with assertions active. Eleven owners execute in each
+configuration; the clipboard mutation owner explicitly skips without permission.
+HotFileSys remains a draft no-op, not an implemented watcher. Native owner proof
+also covers scratch overflow rejection and child-table reap/reuse accounting.
+See the checklist for exact scope; no Windows, performance or live reload claim.
