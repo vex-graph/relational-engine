@@ -70,7 +70,7 @@ struct Cache {
 
 static uint64_t current_time_ms(void) {
     struct timeval tv;
-    gettimeofday(&tv, nullptr);
+    gettimeofday(&tv, NULL);
     return ((uint64_t) tv.tv_sec * 1000ULL) + ((uint64_t) tv.tv_usec / 1000ULL);
 }
 
@@ -121,7 +121,7 @@ bool Cache_open(const char *subsystem, Cache **cache_out) {
     if (!cache_out) {
         return false;
     }
-    *cache_out = nullptr;
+    *cache_out = NULL;
 
     const char *sub = subsystem ? subsystem : "default";
     VexHome_cacheEnsure(sub);
@@ -206,7 +206,7 @@ bool Cache_get_data(const Cache *cache, const char *key, void **data_out, size_t
     if (!cache || !key || !data_out || !size_out) {
         return false;
     }
-    *data_out = nullptr;
+    *data_out = NULL;
     *size_out = 0;
 
     char bin_path[512];
@@ -342,10 +342,10 @@ bool Cache_clear(Cache *cache) {
         return false;
     }
 
-    struct dirent *entry = nullptr;
+    struct dirent *entry = NULL;
     char filepath[1024];
 
-    while ((entry = readdir(d)) != nullptr) {
+    while ((entry = readdir(d)) != NULL) {
         const char *name = (*entry).d_name;
         if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0 || strcmp(name, "dictionary.ini") == 0) {
             continue;
@@ -359,5 +359,5 @@ bool Cache_clear(Cache *cache) {
 }
 
 const char *Cache_get_dir(const Cache *cache) {
-    return cache ? (*cache).dir_path : nullptr;
+    return cache ? (*cache).dir_path : NULL;
 }
