@@ -6,6 +6,9 @@ publish = false
 license = "MIT"
 description = "Learning byte-storage backend with an explicit C boundary"
 
+[dependencies]
+relational-annotations = { path = "annotations" }
+
 [lib]
 path = "src/lib.rs"
 crate-type = ["rlib", "staticlib"]
