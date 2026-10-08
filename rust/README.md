@@ -146,8 +146,8 @@ retention without changing the current value. This is byte storage, not UTF-8
 validation, record-schema migration, or atomicity across multiple fields.
 
 The canonical C declarations are in `include/relational_engine/memory.h`;
-`include/relational_memory.h` remains a compatibility include. Vexspoke's
-optional `nio/relational_memory.h` exposes these externs when supplied the
+`include/relational_memory.h` remains a compatibility include. The
+engine-owned `nio/relational_memory.h` exposes these externs when supplied the
 engine include path and linked to the resident engine static library. Rust/C
 atomic layouts are not shared. String gets copy one complete snapshot into a
 caller buffer, with an explicit truncation flag on insufficient capacity.
@@ -157,10 +157,11 @@ and quiesce calls before destruction. No Hot loader code has been changed or
 live-reload integration proved. String length replacement works; automatic
 record layout upgrades still require a staged migration/rollback design.
 
-Known gaps: no slabs, BitPool, typed record macros, 16-byte Vexspoke headers,
+Known gaps in this Rust byte API: no slabs, BitPool, typed record macros, 16-byte native headers,
 pointer compatibility, exhaustive legacy Memory OOM injection, shared registry
 mutation, performance or Windows
 proof, deterministic writer-busy fault injection or full Rust sanitizer proof.
 The constructor follows Rust's abort-on-OOM Box policy. Vec-to-box
 conversion may allocate. These cold operations are not real-time safe. Vexspoke
-remains unchanged; this backend is not wired to R5.
+CPU consumers now use engine-owned native IO/NIO; this separate Rust byte API
+is not an automatic replacement of their allocator or a completed R5 migration.
