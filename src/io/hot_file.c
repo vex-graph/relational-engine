@@ -1,4 +1,5 @@
 #include "io/hot_file.h"
+// Production R2 I/O owner: Relational Engine; existing HotFile ABI preserved.
 #include "annotation/definition.h"
 #include "annotation/overview.h"
 
@@ -10,7 +11,7 @@
  * OS-level file monitoring and hot-reloading infrastructure: a pump-based
  * watcher that detects source/config file changes and triggers lock-safe
  * reloads. Exists because hotcwap's loader needs to know when a module's
- * source changed without polling the filesystem on the frame path. Memory:
+ * source changed without polling the filesystem on the frame path. memory:
  * currently a ;;DRAFT seam — init/shutdown/pumpEvents are stubs awaiting the
  * macOS FSEvents background thread. Lifetime: process-scoped; pumpEvents is
  * called by the R1 host.
