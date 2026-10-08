@@ -1,4 +1,5 @@
 #include "io/log.h"
+// Production R2 I/O owner: Relational Engine; existing Log ABI preserved.
 
 #include <stdlib.h>
 #include <string.h>
