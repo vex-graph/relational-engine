@@ -81,6 +81,11 @@ files remain comparison material; migrated native IO/NIO is production code.
 - `rust`: Cargo-recognized Rust scratchpad for the future storage manager.
   A learning backend now owns byte blocks and exposes a standalone C copy ABI;
   it is not the Vexspoke allocator or a production storage manager.
+- `rust/annotations` + `rust/src/annotation.rs`: a zero-dependency proc-macro
+  crate providing the Rust form of the C `;;` annotation markers (`#[overview]`,
+  `#[intention("...")]`, `#[what("T")]`, …); `annotation.rs` re-exports them so
+  engine files use `crate::annotation::*`. Attributes are compile-time passthroughs
+  (the Two-Semicolon Annotation Style Law).
 - Owner and tooling tests live in the independent workspace `../../../tests/relational-engine`.
 
 The imported C reference retains Vexspoke's Boost Software License in
