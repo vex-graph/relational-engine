@@ -1,4 +1,5 @@
 #include "io/clipboard.h"
+// Production R2 I/O owner: Relational Engine; existing Clipboard ABI preserved.
 #include <string.h>
 
 #include "annotation/definition.h"
@@ -38,7 +39,7 @@
  * Getters:
  *   - Clipboard_hasText(void)                    : true when text is stored
  *   - Clipboard_hasImage(void)                   : always false (no pasteboard)
- *   - Clipboard_getText(dest, maxBytes)          : copy stored text, bytes written
+ *   - Clipboard_getText(dest, maxBytes)          : copy stored text, Bytes written
  *   - Clipboard_getImage(dest, maxBytes, outWidth, outHeight) : always false
  *
  * Setters:
