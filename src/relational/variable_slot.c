@@ -95,7 +95,7 @@
 // the search splitter — stored between segments, never a segment of its own,
 // and never the first character (the hash bucket reads the first character).
 // Empty segments (leading, trailing, or doubled dots) are rejected. Writes
-// NUL-terminated folded bytes into out, which must hold VARIABLE_SLOT_NAME_BYTES.
+// NUL-terminated folded Bytes into out, which must hold VARIABLE_SLOT_NAME_BYTES.
 bool VariableSlot_foldName(const char *name, char *out) {
     if (name == nullptr || name[0] == '\0')
         return false;
@@ -143,7 +143,7 @@ int VariableSlot_bucketOf(char c) {
 }
 
 // Store a validated folded name into the slot, zero-padding the tail so the
-// 24-byte buffer has no stale bytes.
+// 24-byte buffer has no stale Bytes.
 static void storeName(VariableSlot *self, const char *folded) {
     char *dest = (*self).name;
     memset(dest, 0, VARIABLE_SLOT_NAME_BYTES);

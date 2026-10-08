@@ -23,7 +23,7 @@ typedef struct FileWriter {
 // Returns true on success.
 bool FileWriter_open(FileWriter *w, const char *path);
 
-// Write len bytes from data into the buffered writer. No-op when closed.
+// Write len Bytes from data into the buffered writer. No-op when closed.
 void FileWriter_write(FileWriter *w, const uint8_t *data, size_t len);
 
 void FileWriter_flush(FileWriter *w);

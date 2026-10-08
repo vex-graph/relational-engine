@@ -202,7 +202,7 @@ bool VexHome_cacheEnsure(const char *subsystem) {
     if (!f)
         return false;
 
-    time_t now = time(NULL);
+    time_t now = time(nullptr);
     struct tm tm_buf;
     localtime_r(&now, &tm_buf);
     char date_buf[32];
@@ -237,7 +237,7 @@ bool VexHome_ensure(void) {
         return false;
     if (!File_mkdirs(VexHome_placeholder()))
         return false;
-    if (!File_mkdirs(VexHome_cache(NULL)))
+    if (!File_mkdirs(VexHome_cache(nullptr)))
         return false;
     ensured = true;
     return true;

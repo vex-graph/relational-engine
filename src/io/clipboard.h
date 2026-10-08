@@ -27,14 +27,14 @@ bool   Clipboard_hasText(void);
 bool   Clipboard_hasImage(void);
 
 // Read UTF-8 text from clipboard into caller-owned dest buffer.
-// Returns the number of bytes written, or 0 if empty/no text.
+// Returns the number of Bytes written, or 0 if empty/no text.
 size_t Clipboard_getText(char *dest, size_t maxBytes);
 
 // Write UTF-8 text string to clipboard.
 bool   Clipboard_setText(const char *text);
 
 // Read raw RGBA8 image pixels from clipboard.
-// Dest-last order: writes width, height, and pixel bytes into caller buffer.
+// Dest-last order: writes width, height, and pixel Bytes into caller buffer.
 bool   Clipboard_getImage(void *dest, size_t maxBytes, int32_t *outWidth, int32_t *outHeight);
 
 // Write raw RGBA8 image pixels to clipboard.

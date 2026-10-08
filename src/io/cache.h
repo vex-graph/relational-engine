@@ -13,7 +13,7 @@ typedef struct CacheEntryMeta {
     char key_hash[65];      // 64 hex characters + null terminator
     uint64_t cached_at_ms;  // Epoch timestamp in milliseconds
     uint64_t ttl_sec;       // Time-to-live in seconds (0 = never expire)
-    uint64_t content_size;  // Size of content in bytes
+    uint64_t content_size;  // Size of content in Bytes
 } CacheEntryMeta;
 
 typedef struct Cache Cache;
@@ -34,7 +34,7 @@ bool Cache_get_path(const Cache *cache, const char *key, char *path_out, size_t 
 // Read cached data into a dynamically allocated buffer (caller frees)
 bool Cache_get_data(const Cache *cache, const char *key, void **data_out, size_t *size_out);
 
-// Store raw bytes in cache under key with an optional TTL (0 = permanent)
+// Store raw Bytes in cache under key with an optional TTL (0 = permanent)
 bool Cache_put_data(Cache *cache, const char *key, const void *data, size_t size, uint64_t ttl_sec);
 
 // Store an existing file in cache under key by copying it into the cache store

@@ -14,7 +14,7 @@
 // reader (void* (*)(void*)), and a target (the value / owner). A Field embeds
 // one; a Struct is a list of Fields; a Class owns a Struct. The kind is the
 // header typeId (TYPE_REFLECT_VARIABLE). Block layout:
-// [MemoryHeader 16][name 24][read 8][target 8] = 40 bytes.
+// [MemoryHeader 16][name 24][read 8][target 8] = 40 Bytes.
 //
 // COLD PATH ONLY (the Cold-Only Reflection Law).
 
@@ -29,7 +29,7 @@ typedef struct Variable {
     void *target;                           // the value / owner
 } Variable;
 
-_Static_assert(sizeof(Variable) == 40u, "Variable must stay 40 bytes");
+_Static_assert(sizeof(Variable) == 40u, "Variable must stay 40 Bytes");
 
 bool Variable_init(Variable *self, const char *name, VariableReadFn read, void *target);
 Variable *Variable_0(void);

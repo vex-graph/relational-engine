@@ -29,7 +29,7 @@
  * ChunkedList of VariableSlot rows, so a slot grows without a ceiling and rows
  * never move; collisions resolve by a full 24-byte name compare.
  *
- * Memory: bands (1024-slot arrays) are minted on first use of a first-char, so
+ * memory: bands (1024-slot arrays) are minted on first use of a first-char, so
  * an empty map costs 39 pointers. A slot list starts tiny (root of one slot,
  * one leaf of VARIABLE_HASH_SLOT_LEAF rows) and grows by adding leaves. All
  * backing is arena memory.
@@ -112,11 +112,11 @@ static ChunkedList **ensureBand(VariableHashMap *map, uint32_t bucket) {
     ChunkedList **band = (*map).bands[bucket];
     if (band)
         return band;
-    size_t bytes = (size_t) VARIABLE_HASH_SLOTS * sizeof(ChunkedList*);
-    band = (ChunkedList**) Memory_alloc(TYPE_VARIABLE_HASH_MAP, bytes);
+    size_t Bytes = (size_t) VARIABLE_HASH_SLOTS * sizeof(ChunkedList*);
+    band = (ChunkedList**) Memory_alloc(TYPE_VARIABLE_HASH_MAP, Bytes);
     if (!band)
         return nullptr;
-    memset(band, 0, bytes);
+    memset(band, 0, Bytes);
     (*map).bands[bucket] = band;
     return band;
 }

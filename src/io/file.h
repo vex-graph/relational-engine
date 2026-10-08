@@ -7,8 +7,8 @@
 
 // io/file.h — the File class, ported from io/File.java.
 //
-// A self-describing Memory block wrapping a stdio stream: name, handle, cached
-// size, read/write cursor, and mode. Reads and writes move bytes straight
+// A self-describing memory block wrapping a stdio stream: name, handle, cached
+// size, read/write cursor, and mode. Reads and writes move Bytes straight
 // between the file and caller-owned memory. Mode flags mirror the legacy
 // ForeignMemory FILE_MODE_* set. Creates parent directories when CREATE is set.
 
@@ -36,11 +36,11 @@ File *File_open(const char *path, uint32_t mode);
 // pointer is nullptr. The pointer is invalid after the call.
 bool File_close(File *f);
 
-// Read up to max_len bytes into caller-owned memory at dest. Returns bytes
+// Read up to max_len Bytes into caller-owned memory at dest. Returns Bytes
 // read (advancing the cursor), or -1 on error.
 int64_t File_read(File *f, void *dest, int64_t max_len);
 
-// Write len bytes from caller-owned memory at src. Returns bytes written
+// Write len Bytes from caller-owned memory at src. Returns Bytes written
 // (advancing the cursor and growing the cached size), or -1 on error.
 int64_t File_write(File *f, const void *src, int64_t len);
 

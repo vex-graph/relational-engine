@@ -27,7 +27,7 @@
 typedef struct ShelfNode {
     uintptr_t cell; // the identity cell this node references (0 when bare)
     uint32_t next;  // graph edge: u32 index of the next node (SHELF_INDEX_NONE = end)
-    uint32_t pad;   // explicit padding (keeps the row 16 bytes)
+    uint32_t pad;   // explicit padding (keeps the row 16 Bytes)
 } ShelfNode;
 
 typedef struct Shelf {

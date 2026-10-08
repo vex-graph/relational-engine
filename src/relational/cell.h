@@ -10,7 +10,7 @@
 // relational/cell.h — the 32-byte identity cell.
 //
 // A cell is one arena block whose 16-byte MemoryHeader IS its identity — the
-// "self-describing header" (the Self-Describing Memory Block Law) made the unit
+// "self-describing header" (the Self-Describing memory Block Law) made the unit
 // of reflection. The block is:
 //
 //     [ MemoryHeader 16B: typeId | length | sugar ][ value 8B ][ pad 8B ]  = 32B
@@ -18,7 +18,7 @@
 //
 // The `value` field is a thin pointer to the cell's value, or the value inline
 // for small kinds — one 8-byte slot either way, so the cell is uniform. The pad
-// rounds the block to 32 bytes (two cells per cache line).
+// rounds the block to 32 Bytes (two cells per cache line).
 //
 // Cell_check(cell, typeId) reads the identity header's typeId, so a live
 // pointer can answer "are you kind X?" without a side table. This is the block
@@ -29,10 +29,10 @@
 
 typedef struct Cell {
     uintptr_t value; // thin pointer to the value, or the value inline
-    uintptr_t pad;   // tail padding so the block is 32 bytes
+    uintptr_t pad;   // tail padding so the block is 32 Bytes
 } Cell;
 
-_Static_assert(sizeof(Cell) == CELL_PAYLOAD_BYTES, "Cell payload must stay 16 bytes");
+_Static_assert(sizeof(Cell) == CELL_PAYLOAD_BYTES, "Cell payload must stay 16 Bytes");
 
 // --- Constructors ---
 // Cell_0() is an anonymous cell (typeId 0, PROJ_GENERIC); Cell_1/_2 carry the

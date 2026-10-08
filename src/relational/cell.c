@@ -21,7 +21,7 @@
  * standard 16-byte MemoryHeader (typeId, length, sugar — the identity) plus a
  * 16-byte payload (a value/pointer slot and padding). A cell is therefore
  * self-describing: Cell_check(cell, typeId) answers its kind straight from the
- * header, with no side table and no extra bytes.
+ * header, with no side table and no extra Bytes.
  *
  * Lifetime: arena-allocated (TYPE from the caller's typeId) and released with
  * Cell_free, or wholesale at arena teardown. The identity typeId is the
@@ -44,7 +44,7 @@
  * ----------------------------------------------------------------------------
  *   Cell {
  *     uintptr_t value; // thin pointer to the value, or the value inline
- *     uintptr_t pad;   // tail padding so the block is 32 bytes
+ *     uintptr_t pad;   // tail padding so the block is 32 Bytes
  *   }
  *
  * PRIVATE HELPERS (kept file-local, pure data, no behavior): none.

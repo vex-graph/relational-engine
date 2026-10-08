@@ -39,7 +39,7 @@
  * Getters:
  *   - Clipboard_hasText(void)                    : true when text is stored
  *   - Clipboard_hasImage(void)                   : always false (no pasteboard)
- *   - Clipboard_getText(dest, maxBytes)          : copy stored text, bytes written
+ *   - Clipboard_getText(dest, maxBytes)          : copy stored text, Bytes written
  *   - Clipboard_getImage(dest, maxBytes, outWidth, outHeight) : always false
  *
  * Setters:

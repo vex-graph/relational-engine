@@ -13,9 +13,9 @@
 // A Field IS a Variable plus a setter: it EMBEDS a Variable (name + reader +
 // target) and adds the write behavior. "field { variable }" made literal — the
 // name, reader and target all live in the embedded Variable; the field's own
-// bytes are just that Variable plus its setter. The kind is the header typeId
+// Bytes are just that Variable plus its setter. The kind is the header typeId
 // (TYPE_REFLECT_FIELD). Block layout:
-// [MemoryHeader 16][Variable 40][set 8] = 64 bytes.
+// [MemoryHeader 16][Variable 40][set 8] = 64 Bytes.
 
 typedef void (*FieldSetFn)(void *, void *);
 
@@ -28,7 +28,7 @@ typedef struct Field {
     FieldSetFn set;    // the setter
 } Field;
 
-_Static_assert(sizeof(Field) == 48u, "Field must stay 48 bytes");
+_Static_assert(sizeof(Field) == 48u, "Field must stay 48 Bytes");
 
 bool Field_init(Field *self, const char *name, VariableReadFn read, FieldSetFn set, void *target);
 Field *Field_0(void);

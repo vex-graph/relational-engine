@@ -13,7 +13,7 @@
 // is a pointer" — a name/pointer table whose values are themselves addresses
 // of other headed blocks.
 //
-// Row layout (16 bytes): [slot u32][classId u32][pointer u64]. Class is
+// Row layout (16 Bytes): [slot u32][classId u32][pointer u64]. Class is
 // pinned at creation (no setter by design — rebind the value, not the kind).
 // Lookup by name goes pool-first (binary search, shared globally), then one
 // sparse hop (slot -> var id). Typed queries filter rows by classId
@@ -78,7 +78,7 @@ void SymbolTable_setPointer(SymbolTable *v, int32_t varId, uintptr_t targetPoint
 bool SymbolTable_compareAndSetPointer(SymbolTable *v, int32_t varId, uintptr_t expected, uintptr_t newPointer);
 uint32_t SymbolTable_getClassId(SymbolTable *v, int32_t varId);
 
-// Copy the registered name into _out (nul-terminated, at most outCap bytes).
+// Copy the registered name into _out (nul-terminated, at most outCap Bytes).
 // Returns the string length, or -1 on bad varId / short buffer.
 int SymbolTable_getName(SymbolTable *v, int32_t varId, char *out, size_t outCap);
 

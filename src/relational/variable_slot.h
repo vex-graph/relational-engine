@@ -36,7 +36,7 @@ typedef struct VariableSlot {
     uintptr_t pointer;                    // the value cell address (the destination)
 } VariableSlot;
 
-_Static_assert(sizeof(VariableSlot) == VARIABLE_SLOT_SIZE, "VariableSlot must stay 32 bytes");
+_Static_assert(sizeof(VariableSlot) == VARIABLE_SLOT_SIZE, "VariableSlot must stay 32 Bytes");
 
 // --- Constructors ---
 // Inline init: validate + fold the name and set the pointer. False on a null
@@ -46,7 +46,7 @@ bool VariableSlot_init(VariableSlot *self, const char *name, uintptr_t pointer);
 
 // Validate + fold a name into the slot grammar: one or more '.'-separated
 // segments of [a-z0-9_$-], 1..23 characters total, folded to lowercase. Writes
-// NUL-terminated folded bytes into out, which must hold VARIABLE_SLOT_NAME_BYTES.
+// NUL-terminated folded Bytes into out, which must hold VARIABLE_SLOT_NAME_BYTES.
 // The dot is the search splitter (stored, never a segment of its own; empty
 // segments rejected). The atom owns this policy; the hash map and the segment
 // search reuse it. False on null/empty/overlong/illegal.
@@ -75,7 +75,7 @@ bool VariableSlot_setName(VariableSlot *self, const char *name);
 void VariableSlot_setPointer(VariableSlot *self, uintptr_t pointer);
 
 // --- Getters (null-safe) ---
-// Copy the folded name into out (NUL-terminated, at most outCap bytes). Returns
+// Copy the folded name into out (NUL-terminated, at most outCap Bytes). Returns
 // the name length, or -1 on a null slot / null out / short buffer.
 int VariableSlot_getName(const VariableSlot *self, char *out, size_t outCap);
 uintptr_t VariableSlot_getPointer(const VariableSlot *self);

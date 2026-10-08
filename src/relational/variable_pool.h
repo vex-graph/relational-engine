@@ -11,16 +11,16 @@
 //
 // Names are stated once, shared by pointer, never copied: each distinct name
 // lives in exactly one 32-byte slot, and variable rows (or any consumer)
-// reference the slot instead of duplicating bytes. One table per process —
+// reference the slot instead of duplicating Bytes. One table per process —
 // name identity is inherently global (two arenas interning "label" must
 // share, not duplicate). Backing comes from the init-time arena; pool
 // strings are immutable and freed wholesale at arena teardown, never per
 // string. All entries serialize on an internal spinlock.
 //
 // SLOT RECORD (owned by the pool service, behaviorless):
-//   [ptr][str1][str2][str3] — 4x uint64, 32 bytes total:
+//   [ptr][str1][str2][str3] — 4x uint64, 32 Bytes total:
 //     self  : intrusive validity, must equal the slot's own address
-//     name  : NUL-terminated bytes, zero-padded (exact bytes, no case fold)
+//     name  : NUL-terminated Bytes, zero-padded (exact Bytes, no case fold)
 // Lookup goes through a sorted u32 index over the slots (binary search with
 // full 24-byte compares). Slot indices stay valid forever; raw slot pointers
 // hold until the next grow — re-resolve via find/slot, or gate use on isSlot.
@@ -31,7 +31,7 @@
 
 typedef struct StringSlot {
     uint64_t self;      // intrusive validity: must equal own address
-    char name[24];      // NUL-terminated, zero-padded, exact bytes
+    char name[24];      // NUL-terminated, zero-padded, exact Bytes
 } StringSlot;
 
 // One-time setup on an arena (allocates the initial slots + index).

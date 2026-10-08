@@ -15,7 +15,7 @@
 // in a never-moved ChunkedList (data-oriented, growable, stable addresses), so a
 // Field's address is stable for the Struct's whole life. The kind is the header
 // typeId (TYPE_REFLECT_STRUCT). Block layout:
-// [MemoryHeader 16][name 24][count 4][pad 4][fields 8] = 56 bytes.
+// [MemoryHeader 16][name 24][count 4][pad 4][fields 8] = 56 Bytes.
 
 #define REFLECT_STRUCT_NAME_BYTES VARIABLE_SLOT_NAME_BYTES
 #define REFLECT_STRUCT_NAME_MAX VARIABLE_SLOT_NAME_MAX
@@ -28,7 +28,7 @@ typedef struct Struct {
     ChunkedList *fields;                  // never-moved Field rows
 } Struct;
 
-_Static_assert(sizeof(Struct) == 40u, "Struct must stay 40 bytes");
+_Static_assert(sizeof(Struct) == 40u, "Struct must stay 40 Bytes");
 
 bool Struct_init(Struct *self, const char *name);
 Struct *Struct_0(void);

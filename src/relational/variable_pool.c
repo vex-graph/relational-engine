@@ -45,7 +45,7 @@
  * ----------------------------------------------------------------------------
  *   StringSlot {
  *     uint64_t self;  // intrusive validity: must equal own address
- *     char name[24];  // NUL-terminated, zero-padded, exact bytes
+ *     char name[24];  // NUL-terminated, zero-padded, exact Bytes
  *   }
  *
  * PRIVATE HELPERS (kept file-local pure-data only, each with full fields):
@@ -62,7 +62,7 @@
  * SLOT RECORD (owned by this service, behaviorless, see variable_pool.h):
  * ----------------------------------------------------------------------------
  *   StringSlot self;    // uint64_t + intrusive validity, equals own address
- *   StringSlot name;    // char[24] + NUL-terminated bytes, zero-padded
+ *   StringSlot name;    // char[24] + NUL-terminated Bytes, zero-padded
  * FUNCTION REGISTRY:
  * ----------------------------------------------------------------------------
  * Constructors:

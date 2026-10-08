@@ -17,7 +17,7 @@
  * A bounded, thread-free WebSocket frame slot for the R1 leaf layer. Fixed rx
  * buffer, connection state, cancel flag, and timeout — zero steady-state
  * allocation, no threads, no sockets. Bytes arrive via WsClient_feed from the
- * R0 driver (which owns the socket); WsClient_poll drains pending bytes with a
+ * R0 driver (which owns the socket); WsClient_poll drains pending Bytes with a
  * bounded wait: timeoutNs clamped to WS_CLIENT_POLL_MAX_NS (100ms), ~1ms
  * nanosleep slices, cancel flag re-checked each slice, false (drop-degrade)
  * on timeout per the Bounded Wait Law.
@@ -33,7 +33,7 @@
  * Fixed rx buffer, connection state, cancel flag, and timeout — zero
  * steady-state allocation, no threads, no sockets. Bytes arrive via
  * WsClient_feed from the R0 driver (which owns the socket); WsClient_poll
- * drains pending bytes with a bounded wait: timeoutNs clamped to
+ * drains pending Bytes with a bounded wait: timeoutNs clamped to
  * WS_CLIENT_POLL_MAX_NS (100ms, Rule 27), ~1ms nanosleep slices,
  * cancel flag re-checked each slice, false (drop-degrade) on timeout.
  *
@@ -42,7 +42,7 @@
  *   WsClient {
  *     WsClientState state;             // IDLE/CONNECTING/OPEN/CLOSING/CLOSED
  *     uint8_t rxBuf[WS_CLIENT_RX_CAP]; // fixed 4096B pending buffer, no alloc
- *     uint32_t rxLen;                  // pending bytes (0..RX_CAP)
+ *     uint32_t rxLen;                  // pending Bytes (0..RX_CAP)
  *     uint64_t timeoutNs;              // default poll budget, clamped Rule 27
  *     bool cancelled;                  // cancel flag; poll drops on sight
  *   }
@@ -55,7 +55,7 @@
  *
  * Core Functions:
  *   - WsClient_free(self)
- *   - WsClient_feed(self, bytes, len)
+ *   - WsClient_feed(self, Bytes, len)
  *   - WsClient_poll(self, timeoutNs, dest, destCap, outLen)
  *   - WsClient_cancel(self)
  *   - WsClient_clear(self)
@@ -118,14 +118,14 @@ void WsClient_free(WsClient *self) {
     Memory_free(self);
 }
 
-bool WsClient_feed(WsClient *self, const uint8_t *bytes, uint32_t len) {
-    if (!self || !bytes)
+bool WsClient_feed(WsClient *self, const uint8_t *Bytes, uint32_t len) {
+    if (!self || !Bytes)
         return false;
     if (len == 0)
         return false;
     if (len > WS_CLIENT_RX_CAP - (*self).rxLen)
         return false;
-    memcpy((*self).rxBuf + (*self).rxLen, bytes, len);
+    memcpy((*self).rxBuf + (*self).rxLen, Bytes, len);
     (*self).rxLen += len;
     return true;
 }

@@ -13,7 +13,7 @@
 // A Method is a folded name (the atom's grammar), a callable
 // (void* (*)(void*)), and a target (the owner / default receiver). A Class
 // owns a list of these. The kind is the header typeId (TYPE_REFLECT_METHOD).
-// Block layout: [MemoryHeader 16][name 24][invoke 8][target 8] = 40 bytes.
+// Block layout: [MemoryHeader 16][name 24][invoke 8][target 8] = 40 Bytes.
 //
 // COLD PATH ONLY (the Cold-Only Reflection Law).
 
@@ -28,7 +28,7 @@ typedef struct Method {
     void *target;                         // the owner / default receiver
 } Method;
 
-_Static_assert(sizeof(Method) == 40u, "Method must stay 40 bytes");
+_Static_assert(sizeof(Method) == 40u, "Method must stay 40 Bytes");
 
 bool Method_init(Method *self, const char *name, MethodFn invoke, void *target);
 Method *Method_0(void);

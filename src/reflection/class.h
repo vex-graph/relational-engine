@@ -34,7 +34,7 @@ typedef struct Class {
     uint32_t pad;                        // explicit padding
 } Class;
 
-_Static_assert(sizeof(Class) == 56u, "Class must stay 56 bytes");
+_Static_assert(sizeof(Class) == 56u, "Class must stay 56 Bytes");
 
 bool Class_init(Class *self, const char *name, Struct *layout, ClassConstructFn construct);
 Class *Class_0(void);
