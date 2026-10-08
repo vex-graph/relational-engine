@@ -5,6 +5,37 @@ R2 memory/storage owner with Rust-owned spans and native C search.
 The local checkout is `ecosystem/repos/relational-engine`; its physical location
 does not change its R2 rank. This is a partial backend, not a finished engine.
 
+## Current State
+
+**Role:** R2 memory/storage owner. A partial backend, not a finished engine.
+
+**Implemented and proven (macOS arm64):**
+- Migrated production native C IO/NIO: `Memory`/`MemoryArena`/`Transient` (16-byte
+  header arena) and `File`/`Cache`/`Log`/`VexHome`/`ProcessSpawn`/`WsClient` plus
+  the macOS clipboard adapter.
+- Rust `primitives` byte/string with atomic byte and retained immutable string
+  snapshots over a standalone C ABI; stable `Chunk`/`ChunkedList`,
+  `TypedChunk`/`TypedPool`, and a 32-byte `repr(C)` `VariableSlot` +
+  `VariableRegistry` with native C `re_name_search`.
+- The shared **type algebra** (`src/type/type.{h,c}`): the 64-bit id encoding,
+  `PROJ_*`/`ARCH_*`, `Type_make`/`Type_arch`, and the parent-chain resolver
+  (`Type_registerParents`, `Type_registerBareParents`, `Type_getParentClass`,
+  bounded `Type_isA`).
+
+**Stubbed, draft, or planned:** mmap / `MappedFile` (this repository owns the
+primitive; contract agreed, not implemented); buffered readers/writers and
+FFF-style gathering/indexing in `io/`; `compress`/`virtual` modules;
+manifest-backed persistence (discussion, not implemented durable snapshots or
+concurrent writes); live Hotcwap reload integration.
+
+**Platforms proven:** macOS arm64 only; Windows is unproven. Rust sanitizer
+instrumentation is not claimed. `src/relational` and `src/reflection` remain
+imported C comparison material, not production.
+
+**Evidence:** `tests/relational-engine/{native_run.py,rust/run.py}` and
+`tests/test-checklist.md`. The registry C API is
+`re_variables_new/drop/add/find/slot/set_pointer`.
+
 ## R2 responsibility split
 
 R2 has two cooperating repositories. Vexspoke owns CPU computation, math,
@@ -126,3 +157,25 @@ configuration; the clipboard mutation owner explicitly skips without permission.
 HotFileSys remains a draft no-op, not an implemented watcher. Native owner proof
 also covers scratch overflow rejection and child-table reap/reuse accounting.
 See the checklist for exact scope; no Windows, performance or live reload claim.
+
+## Scope and Limitations
+
+**Scope:** R2 memory and storage — allocation, file/cache/log/transport IO,
+stable typed rows, named bindings, native C search over borrowed spans, and the
+shared type-id algebra. It is a backend, not a host or a driver.
+
+**Deliberately not covered:**
+- No GPU work: shaders, dispatch, capabilities and synchronization are Graphvex R3.
+- No host/supervisor role: R1 `hotcwap` owns lifetimes/residency and excludes
+  active users before destruction.
+- Imported `src/relational` and `src/reflection` are comparison material, never
+  part of the production native target.
+
+**Known limits and gaps:**
+- No mmap-backed storage yet; no per-page checksums or crash durability.
+- No automatic record-schema migration; whole-value replacement is not schema
+  migration, and no C/Rust atomic-layout compatibility is assumed.
+- Rust typed pools are a separate API from the native C allocator; the native ABI
+  semantics are preserved, not rewritten in Rust.
+- No Windows execution, general zero-copy storage, complete concurrency/fault
+  coverage, or performance claim.
