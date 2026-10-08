@@ -96,7 +96,37 @@ client, in debug and release, with a borrow-checker compile-negative case and
 C-client ASan/UBSan. Rust internals are not sanitizer-instrumented by that C run.
 Errors use Rust Result or C status codes, not Vexspoke THROW diagnostics.
 
-## Byte and atomic operations
+## Reusable typed storage (first slice)
+
+`TypedChunk!(T[, capacity])` stores actual objects at Rust's aligned `size_of::<T>()`
+stride, with one occupancy bit per slot. `TypedPool!(T[, rows_per_chunk])` starts
+with no backing chunks and allocates on demand. The named default is 1,024 objects
+per chunk, not a total capacity limit; callers may choose smaller geometry for
+large objects. Existing `Chunk`/`ChunkedList` and variable registries stay append-only.
+
+`add(value)` returns a reusable pool-local location. `remove(index)` transfers
+the value out; dropping that result destroys it. Holes are reused before new
+chunks are allocated, without moving surviving objects. `release_empty_chunks()`
+reclaims empty backing allocations while retaining stable directory positions.
+Geometry rejects zero, zero-sized types and layout overflow. Allocation failures
+drop the rejected incoming value but preserve all live values, locations and
+addresses; retry is supported. Allocated-hole reuse does not allocate.
+
+Mutation requires exclusive access. Rust references enforce this statically;
+raw-pointer callers must separately exclude borrowers before removal or teardown.
+These locations are NOT generation-tagged handles: a reused index can name a
+different object. No stale raw-pointer rejection is claimed. This is typed Rust
+storage, not yet a type registry or compatible C allocator boundary.
+
+The proposed 16-byte identity slots/2 MiB identity chunks, generation validation,
+1 MiB optional-name chunks, bulk and scratch APIs remain future work. Identity
+metadata encoding is deliberately not finalized. No compaction, automatic schema
+migration or concurrent allocation is introduced. Two registered typed owner
+targets test bitmap edges, over-alignment, drop ownership, deterministic growth
+failure/retry, reclamation, 20,000 seeded model operations and borrow rejection.
+Rust sanitizer instrumentation and other-host execution remain gaps.
+
+## Byte and atomic operations (existing API)
 
 `get_byte(id, index)` reads ordinary stored Bytes. `get_atomic_byte(id)` reads
 a registered atomic byte; `set_atomic_byte(id, value)` publishes its value.
