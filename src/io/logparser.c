@@ -1,4 +1,5 @@
 #include "io/logparser.h"
+// Production R2 I/O owner: Relational Engine; existing LogParser ABI preserved.
 
 #include <stdio.h>
 #include <string.h>
