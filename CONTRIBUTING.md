@@ -22,6 +22,8 @@ Cargo target output and IDE state stay ignored.
 This repository belongs to [vexgraph-ecosystem](https://github.com/vexgraph-ecosystem/relational-engine)
 at R2 with workspace path `ecosystem/repos/relational-engine`. Vexspoke
 owns CPU computation/behavior; this engine owns memory/storage and native C
-search. Migration is staged with unchanged Vexspoke default allocation. R1 owns
+search. Production native IO/NIO and default Memory implementation have migrated
+here from Vexspoke with compatible C semantics; Rust/container migration remains
+staged. No duplicate IO/NIO implementation is permitted in Vexspoke. R1 owns
 residency/lifetimes; GPU shaders/dispatch remain Graphvex R3. See README.md for
 implemented scope and gaps, not a blanket readiness claim.
