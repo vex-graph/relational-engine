@@ -1,0 +1,126 @@
+#ifndef NIO_MEM_H
+#define NIO_MEM_H
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+// Relational Engine owns this production ForeignMemory API and its implementation.
+// Canonical nio/mem.h includes preserve the existing C ABI for every consumer.
+//
+// 16-BYTE ARENA DOCTRINE (Vex Paradigm):
+// In standard C, programs malloc/free constantly. In vex, the engine carves
+// out one massive master arena at startup. memory is partitioned into
+// size-class slabs for O(1) slot claiming and cache-hot recycling.
+//
+// Every allocation returns a payload pointer whose 16-byte prefix holds:
+//
+//     [ self (64-bit type id) ][ length (32-bit) ][ sugar (32-bit) ]
+//
+// Negative pointer math recovers the header in 1 subtraction; Memory_type()
+// and Memory_length() are free O(1) reads with zero locking. Sugar is the
+// hash-clarification veto over (self, length) — recomputed on every header
+// read, mismatch fails closed. The header is frozen: no growth room lives
+// here (struct evolution is detected per object via length + refused at the
+// manifest gate, never accommodated in-band).
+
+#define MEMORY_HEADER_SIZE 16
+
+typedef struct MemoryHeader {
+    uint64_t typeId;
+    uint32_t length;
+    uint32_t sugar;
+} MemoryHeader;
+_Static_assert(sizeof(MemoryHeader) == 16, "MemoryHeader must stay 16 Bytes");
+// 16-byte alignment holds by construction, not by attribute (this toolchain's
+// _Alignas rejects typedef application): master/slab arenas come from malloc
+// (16-aligned on arm64 macOS), every slot size and bump total is a multiple
+// of 16, so every payload pointer satisfies (u & 15) == 0 as mem.c guards.
+
+// Backward-compatibility struct alias (legacy 32-bit type view; the live
+// header is MemoryHeader above — do not use Block for new code).
+typedef struct Block {
+    struct Block *prev;
+    struct Block *next;
+    uint32_t typeId;
+    uint32_t length;
+    uint64_t pad;
+} Block;
+
+// Initialize the master arena with a specific total capacity (e.g. 64MB).
+// If not called explicitly, Memory_alloc initializes a 64MB arena lazily.
+bool Memory_init(size_t totalBytes);
+
+// Allocate nbytes with the given type id stamped in the 16-byte header.
+// Returns the aligned payload pointer, or nullptr on failure.
+void *Memory_alloc(uint64_t typeId, size_t numBytes);
+
+// Grow/shrink a block, preserving contents and type. Returns the new payload
+// pointer (the old one is freed). nullptr on failure leaves the original intact.
+void *Memory_realloc(void *userPtr, size_t newBytes);
+
+// Free a block back to its slab pool in O(1) cache-hot time.
+void Memory_free(void *userPtr);
+
+// Free/reset all currently allocated blocks across all slabs in O(1).
+void Memory_freeAll(void);
+
+// Metadata accessors: cost a single pointer subtract in O(1) without locks.
+size_t Memory_length(void *userPtr);
+uint64_t Memory_type(void *userPtr);
+
+// Standard comparison: same kind (provenance-checked self Bytes equal).
+// Answers identity, never content: two ID_STRING blocks of different
+// lengths are similar. Foreign, corrupted, or freed pointers fail closed.
+bool Memory_similar(const void *a, const void *b);
+
+// Search: Return the number of active blocks matching typeId.
+// If outArray is not NULL, fills it with up to maxCount payload pointers.
+size_t Memory_findAll(uint64_t typeId, void **outArray, size_t maxCount);
+
+// Phase-4 instancing (Arena-B): the process-global allocator above is the
+// DEFAULT arena. Secondary arenas are fully isolated slab sets carved from
+// their own malloc — allocate in B, verify, free B, default untouched.
+// Headers are unchanged (16B, no arena tag), so this is ABI-stable: free
+// routes by address-range lookup across a small registry (default + 3).
+// Registration happens pre-threads; the hot path takes no extra locks.
+typedef struct MemoryArena MemoryArena;
+
+// The process-global (default) arena, lazily initialized like Memory_alloc.
+// Borrowed — never destroy it (destroy guards the default). Exists so
+// leaf-global services (the string pool) can anchor backing without
+// threading arena handles through every caller.
+MemoryArena *Memory_defaultArena(void);
+
+MemoryArena *MemoryArena_create(size_t totalBytes);
+void MemoryArena_destroy(MemoryArena *a);
+void *MemoryArena_alloc(MemoryArena *a, uint64_t typeId, size_t numBytes);
+void *MemoryArena_realloc(MemoryArena *a, void *userPtr, size_t newBytes);
+void MemoryArena_free(MemoryArena *a, void *userPtr);
+void MemoryArena_freeAll(MemoryArena *a);
+size_t MemoryArena_findAll(MemoryArena *a, uint64_t typeId, void **outArray, size_t maxCount);
+size_t MemoryArena_activeBytes(MemoryArena *a);
+size_t MemoryArena_capacity(MemoryArena *a);
+
+// Lifetime verification classification
+typedef enum MemoryLifetime {
+    MEMORY_LIFETIME_UNKNOWN = 0,
+    MEMORY_LIFETIME_PERMANENT,
+    MEMORY_LIFETIME_TRANSIENT,
+} MemoryLifetime;
+
+// Transient (Frame / Scratchpad) bump-only arena lifecycle
+// Overflow/layout/capacity rejection is silent and preserves existing state.
+// Transient payload lengths must fit uint32_t; initialization capacity must round
+// to 16-byte alignment without overflowing size_t. Reset excludes active users.
+bool Memory_initTransient(size_t capacity);
+void *Transient_alloc(uint64_t typeId, size_t numBytes);
+void Transient_reset(void);
+bool Transient_contains(const void *ptr);
+uint32_t Transient_getGeneration(void);
+#if defined(DEBUG_BORROW_CHECK)
+const uint8_t *Transient_getBuffer(void);
+#endif
+MemoryLifetime Memory_getLifetime(const void *ptr);
+
+#endif
