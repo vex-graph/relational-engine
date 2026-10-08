@@ -1,4 +1,5 @@
 #include "io/filewriter.h"
+// Production R2 I/O owner: Relational Engine; existing FileWriter ABI preserved.
 
 #include <string.h>
 
