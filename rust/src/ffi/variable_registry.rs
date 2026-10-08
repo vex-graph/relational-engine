@@ -7,7 +7,9 @@
 //! Null drop is safe; null other owner/output rejects. Arbitrary pointer/stale
 //! owner validation is not promised. Returned slot pointers survive growth until
 //! drop. Value addresses are opaque/borrowed, never dereferenced or freed here.
-use crate::{VariableRegistry, VariableSlot, StorageError};
+use crate::variable::variable_registry::VariableRegistry;
+use crate::variable::variable_slot::VariableSlot;
+use crate::nio::storage_error::StorageError;
 use crate::variable::variable_slot::VARIABLE_NAME_MAX;
 
 fn status(error: StorageError) -> u32 {

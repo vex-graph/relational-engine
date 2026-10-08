@@ -11,7 +11,8 @@
 //! Handles are owner-local; using an ID with another owner is caller misuse.
 //! No borrowed block pointer crosses FFI. Errors preserve outputs and content.
 //! Null checks cannot establish arbitrary pointer validity. No Vexspoke ABI parity.
-use crate::{Memory, MemoryError};
+use crate::nio::mem::Memory;
+use crate::nio::memory_error::MemoryError;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn re_memory_new() -> *mut Memory {
