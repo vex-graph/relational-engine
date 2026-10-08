@@ -13,7 +13,7 @@ set(VEXSPOKE_SOURCE_DIR "" CACHE PATH "Optional local Vexspoke src for CPU leaf 
 # native span search (name_search, run through Cargo). These are production;
 # relational/reflection stay reference-only so they never shadow Vexspoke's
 # canonical headers.
-foreach(part nio io search)
+foreach(part nio io search type)
     file(GLOB_RECURSE part_sources CONFIGURE_DEPENDS "src/${part}/*.c" "src/${part}/*.h")
     if(APPLE AND part STREQUAL "io")
         enable_language(OBJC)
