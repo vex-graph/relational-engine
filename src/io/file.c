@@ -1,4 +1,5 @@
 #include "io/file.h"
+// Production R2 I/O owner: Relational Engine; existing File ABI preserved.
 
 #include <errno.h>
 #include <string.h>
