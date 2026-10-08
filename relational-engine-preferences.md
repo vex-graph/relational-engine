@@ -59,10 +59,11 @@ The caller-selected default is 1,024 rows per chunk, never a total ceiling.
 Exclusive removal transfers ownership out and reuses holes without moving live
 objects. Explicit empty-chunk release retains directory positions and requires
 excluding raw-pointer borrowers. Failed fallible growth preserves all live state
-and drops the rejected incoming value. Pool-local indices are reusable locations,
-not generation-tagged handles; no stale-pointer validation, ecosystem type
-registry, C allocator parity, compaction or concurrent allocation is claimed.
-Identity metadata, optional-name integration, bulk and scratch remain future work.
+and drops the rejected incoming value. Raw pool-local indices are reusable
+locations; the generation-tagged `Handle` surface (`add_handle` / `get_handle` /
+`get_handle_mut` / `remove_handle`) is the identity API and rejects a reused slot
+as stale. No ecosystem type registry, C allocator parity, compaction or concurrent
+allocation is claimed. Optional-name integration, bulk and scratch remain future work.
 
 Relational-engine is an R2 storage backend alongside Vexspoke, not R1 and not
 a GPU driver. Engine `src/io` and `src/nio` now own the production native C
