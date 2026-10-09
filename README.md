@@ -26,8 +26,14 @@ does not change its R2 rank. This is a partial backend, not a finished engine.
   (`Type_registerParents`, `Type_registerBareParents`, `Type_getParentClass`,
   bounded `Type_isA`).
 
-**Stubbed, draft, or planned:** mmap / `MappedFile` (this repository owns the
-primitive; contract agreed, not implemented); buffered readers/writers and
+**Implemented mapping slice:** Rust `nio::mapped_file::MappedFile` retains an
+existing regular file and fixed read-only/shared writable byte view until close/drop.
+Checked offset/count access, explicit writeback/sync and unsafe external-file
+exclusion have passing macOS arm64 debug/release owners and intended compiler
+rejections through `tests/relational-engine/rust/run.py`. Mapping is not a database
+transaction or hot arena; the proof gaps below still apply.
+
+**Stubbed, draft, or planned:** mapping resize/C ABI; buffered readers/writers and
 FFF-style gathering/indexing in `io/`; `compress`/`virtual` modules;
 manifest-backed persistence (discussion, not implemented durable snapshots or
 concurrent writes); live Hotcwap reload integration.
@@ -64,7 +70,7 @@ Relational-engine is an **R2 storage backend alongside Vexspoke**, not a host or
 graphics driver. Rust modules separate `nio`, `io`, `primitives`, `variable`,
 `struct`, `compress`, and `virtual`. Memory/string/FFI, stable chunks, append-only
 collections, variable slots/registry and native C name search have implementations.
-mmap belongs in `nio`; file access/writes, buffered readers/writers and FFF-style
+mmap is implemented in Rust `nio`; buffered readers/writers and FFF-style
 gathering/indexing belong in `io` as planned work. Manifest-backed persistent
 objects remain discussion, not implemented durable snapshots or concurrent file
 writes. Graphics compute (GPU shaders/dispatch) remains Graphvex-owned.
@@ -142,6 +148,34 @@ No b configuration selects the CMake adapter.
 
 ## Verification and known gaps
 
+### Persistent file views (Rust)
+
+`MappedFile!(path)` opens read-only; `MappedFile!(path, true)` opens shared
+read/write. Both require an explicit unsafe block: the caller must prevent other
+access that mutates/truncates the file or violates writable exclusivity until
+close/drop. `MappedFile!()` creates a safe closed owner. Empty files are admitted
+without an OS mapping. Admission never creates, truncates or resizes a file.
+
+The application may retain this owner for its lifetime and use
+`read(offset, length)` or `write(offset, bytes)`. Borrowed slices cannot outlive
+the mapping; bounds/overflow reject before access. Persist **file identity plus
+offset**, not a RAM pointer. The consumer validates record types/lengths and format.
+Do not cast arbitrary file bytes to Rust structs containing references, bools or
+other restricted bit patterns. No mapped C ABI or typed file-pointer API is shipped.
+
+`flush()` requests mapped-page writeback; `sync()` also requests file synchronization.
+OS errors propagate and previously written bytes are not rolled back. `close()`
+does not sync. These operations and page faults have no hard latency bound, so
+mapping is cold storage, never a realtime/hot-arena replacement. Symlinks follow
+OS semantics: the API is not path confinement, and read-only mode alone does not
+protect against external truncation. Untrusted mutable files need snapshot/copy
+or genuinely enforced exclusive ownership before mapping.
+
+Owner proof: `tests/relational-engine/rust/nio/{mapped_file,mapping_error}_test.rs`
+and unsafe/borrow/type/arity negatives in `rust/run.py`. OS mapping/flush/sync
+failure injection, huge-file admission, crash durability, Rust sanitizer instrumentation,
+Windows and macOS 14 runtime compatibility remain unproved.
+
 The row-pool cycle ran `python3 tests/relational-engine/rust/run.py`: debug/release
 owners, intended compile failures, and real C row-pool clients with assertions,
 `-Wall -Wextra -Werror` and C-side ASan/UBSan. Rust ASan was attempted separately
@@ -205,7 +239,8 @@ shared type-id algebra. It is a backend, not a host or a driver.
   part of the production native target.
 
 **Known limits and gaps:**
-- No mmap-backed storage yet; no per-page checksums or crash durability.
+- Fixed-extent Rust mmap bytes only; no resize/C mapping ABI, per-page checksums,
+  hostile-file exclusion enforcement, transactions or crash durability.
 - No automatic record-schema migration; whole-value replacement is not schema
   migration, and no C/Rust atomic-layout compatibility is assumed.
 - Rust typed pools are a separate API from the native C allocator; the native ABI
