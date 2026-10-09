@@ -5,6 +5,8 @@ pub mod memory_error;
 pub mod storage_error;
 pub mod chunk;
 pub mod typed_chunk;
+pub mod row_chunk;
+pub mod row_handle;
 pub(crate) mod projection;
 mod block;
 mod value;

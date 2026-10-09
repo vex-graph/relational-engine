@@ -35,6 +35,9 @@ pub use nio::typed_chunk::TypedChunk;
 pub use nio::storage_error::StorageError;
 pub use r#struct::chunked_list::ChunkedList;
 pub use r#struct::typed_pool::TypedPool;
+pub use r#struct::row_pool::RowPool;
+pub use nio::row_handle::RowHandle;
+pub use nio::row_chunk::RowChunk;
 pub use variable::variable_slot::VariableSlot;
 pub use variable::variable_registry::VariableRegistry;
 
