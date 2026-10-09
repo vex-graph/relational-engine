@@ -1,5 +1,6 @@
 //! DEFINITION: MappingError reports fixed-extent mapping admission and access failures.
-//! OVERVIEW: Closed, ReadOnly, Bounds, Length, NotRegularFile, Io(std::io::Error).
+//! OVERVIEW: Closed, ReadOnly, Bounds, Length, NotRegularFile, Io(std::io::Error),
+//! Preallocation(PreallocationError) for retained-descriptor admission failures.
 //! Public: Display/error source preserve OS diagnostics without synchronous logging.
 use crate::annotation::{definition, overview};
 
@@ -13,6 +14,7 @@ pub enum MappingError {
     Length,
     NotRegularFile,
     Io(std::io::Error),
+    Preallocation(crate::io::preallocation_error::PreallocationError),
 }
 
 impl std::fmt::Display for MappingError {
@@ -25,6 +27,7 @@ impl std::fmt::Display for MappingError {
             Self::Length => formatter.write_str("mapping length is not representable"),
             Self::NotRegularFile => formatter.write_str("mapping requires a regular file"),
             Self::Io(error) => write!(formatter, "mapping IO: {error}"),
+            Self::Preallocation(error) => write!(formatter, "mapping preallocation: {error}"),
         }
     }
 }
@@ -34,6 +37,7 @@ impl std::error::Error for MappingError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Io(error) => Some(error),
+            Self::Preallocation(error) => Some(error),
             _ => None,
         }
     }
