@@ -1,7 +1,8 @@
 //! DEFINITION: Handle is a generation-tagged identity for a reusable typed slot.
 //! The index is a pool-local LOCATION; the generation distinguishes reuses, so a
 //! handle whose slot was removed and reused is rejected as stale. A zero handle
-//! is the pristine/unused value. A Handle owns nothing and borrows nothing: it is
+//! is invalid and never issued. Identity is local to its original owner; another
+//! chunk/pool can issue the same pair. A Handle owns nothing and borrows nothing: it is
 //! valid only while its slot is live and its generation still matches.
 //! OVERVIEW: #[repr(C)] Handle { index: usize, generation: u32 }.
 //! API: new/zero/index/generation/is_zero/to_string/to_string_struct.
