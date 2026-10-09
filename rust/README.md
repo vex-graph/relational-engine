@@ -9,6 +9,11 @@ handles have macOS arm64 debug/release Rust owners and real C-client proof throu
 compatible runtime; Windows, macOS 14 runtime compatibility, performance and
 downstream R3–R5 migration remain unproved.
 
+`nio::mapped_file::MappedFile` now owns fixed-extent existing regular-file byte
+views through memmap2. Offset/count access, exclusive writes, explicit sync and
+borrow-negative owners pass macOS arm64 debug/release; unsafe admission requires preventing
+external file mutation/truncation for the lifetime. No resize or mapped C ABI.
+
 C includes `nio/relational_rows.h` (engine src + rust/include paths) and links
 the Cargo static library. See `include/relational_engine/row_pool.h` for exact
 geometry, statuses, borrow lifetime, serialization and teardown contracts. Storage
@@ -33,7 +38,8 @@ means a method is callable; it does not declare another class.
 Relational-engine is an R2 backend alongside Vexspoke. Existing memory/string/FFI
 and stable row/binding code is implemented; other modules retain explicit planned scope:
 
-- `src/nio`: memory and stable typed Chunk; mmap/foreign storage remain planned.
+- `src/nio`: memory, stable typed Chunk and fixed-extent `mapped_file.rs` mmap;
+  mapping resize/C ABI and broader foreign-storage APIs remain planned.
 - `src/io`: file reads/writes, buffered readers/writers, gathering, FFF-style
   indexing/search and watching (planned). Manifest-backed persistent objects are
   proposed, not implemented; serialized identity must use IDs/offsets, not pointers.
@@ -147,6 +153,39 @@ Rust sanitizer instrumentation and other-host execution remain gaps.
 
 ## Byte and atomic operations (existing API)
 
+### Retained file bytes by offset
+
+```rust,no_run
+use relational_engine_scratchpad::MappedFile;
+// SAFETY: the application exclusively owns this existing file and prevents
+// external mutation/truncation and conflicting views until mapping close/drop.
+let mut file = unsafe { MappedFile!("private-store.bin", true)? };
+file.write(8, &[1, 2, 3, 4])?; // checked extent; never silently grows the file
+let value_bytes = file.read(8, 4)?;
+assert_eq!(value_bytes, &[1, 2, 3, 4]);
+file.sync()?; // writeback + OS file sync, not an atomic database commit
+file.close(); // no implicit sync; all views must stop being used first
+# Ok::<(), relational_engine_scratchpad::MappingError>(())
+```
+
+`MappedFile!()`/`zero()` yield a closed empty owner; `new(path)` and the one-argument
+macro admit read-only views. `open(path, writable)` and the two-argument macro
+choose access mode. `as_slice` yields empty bytes for closed/empty owners;
+`as_mut_slice`, checked `read`/`write`, `flush` and `sync` return MappingError on
+invalid state/access. Nonempty files map from offset zero; no guessed page size.
+The owner retains the file, unmaps before releasing it, and rejects close/write/
+drop while incompatible borrows remain used. Store file identity/offsets for
+persistent references: process addresses are not durable identifiers.
+
+No typed reinterpretation, format validation, create/resize, automatic dirty
+tracking, security sandbox or transaction is implied. External truncation can
+fault despite Rust lifetime checks. Mapping/page faults/sync/cleanup can block;
+use only cold storage paths, not realtime or bounded-join worker teardown.
+These operations have no hard latency bound. OS mapping/flush/sync failure
+injection and huge-file admission remain explicit proof gaps.
+OS errors retain their kind/native code; failed sync does not undo writes.
+memmap2/std Drop does not surface unmap/descriptor-close errors.
+
 `get_byte(id, index)` reads ordinary stored Bytes. `get_atomic_byte(id)` reads
 a registered atomic byte; `set_atomic_byte(id, value)` publishes its value.
 `new_atomic_string(bytes, retention_limit)` creates a snapshot-backed byte
@@ -188,7 +227,8 @@ is not an automatic replacement of their allocator or a completed R5 migration.
 ## Scope and Limitations
 
 Rust owns selected storage and exposes C operations without converting consumers
-to Rust. This slice does not provide database transactions, disk durability,
+to Rust. Fixed file mappings provide OS writeback/sync requests, not database
+transactions, crash/power-loss durability guarantees,
 ecosystem type/header parity, hot allocation guarantees, internal shared mutation
 or automatic schema migration. Caller serialization and resident-engine lifetime
 are mandatory; arbitrary/stale pointers are outside the C ABI contract. Current
