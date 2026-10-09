@@ -330,11 +330,13 @@ Rust memory bridge, registry and typed-handle implementations. Other native IO
 owners need their own current proof; this document does not certify the whole
 family or clipboard behavior.
 
-**Mapping status at this review:** no file matching `*mapped*` was found in the
-engine checkout. That inventory check is not a claim about another agent's work
-or every possible implementation name. MappedFile remains a dependency to verify
-before planning a consumer around it. Broader planned areas are described in the
-repo preferences; their implementation is not established by this document.
+**Mapping status:** `rust/src/nio/mapped_file.rs` now owns fixed-extent regular-file
+byte views through memmap2. `mapped_file_test.rs` and `mapping_error_test.rs` pass
+on macOS arm64 in debug/release, with intended unsafe/arity/type/borrow compiler
+rejections in the registered runner. Rust lifetimes protect our own borrowers;
+the caller still prevents external mutation/truncation. No resize, mapped C ABI,
+database transaction or crash-durability claim follows. Broader planned areas
+remain unimplemented unless established by their own source and owner proof.
 
 **Evidence boundary:** `tests/relational-engine/rust/run.py` exercises registered
 debug/release owners, real C clients and C-side ASan/UBSan. C-client ASan/UBSan does
@@ -363,7 +365,11 @@ Honest pressure points, so you can push on them:
 4. **One header, one truth.** The 16-byte block header lives with the allocator; the
    type algebra lives in `src/type`. They are related but separate — worth deciding
    whether the header should carry more self-description.
-5. **Mapping is a choice, not a readiness badge.** mmap exposes file pages through
+5. **Mapping is a choice, not a readiness badge.** Rust MappedFile now implements
+   fixed-extent regular-file bytes with checked offset/count access. Unsafe open
+   requires external mutation/truncation exclusion; borrowing protects only our
+   own view lifetime. Application owners may keep the mapping until shutdown.
+   Persist file identity/offsets, never its process address. mmap exposes file pages through
    addresses; it does not supply transactions or crash recovery. Buffered IO may
    be sufficient for a chosen workload. Page faults can block, so mapped storage
    must not be assumed to satisfy a hot-path latency bound.
@@ -380,7 +386,12 @@ Honest pressure points, so you can push on them:
     byte-row pool documents ownership, layout, statuses, fallible storage allocation
     and teardown. Cold formatting may still abort on OOM; no panic catcher exists.
     Generic Rust pools do not automatically become a generic C allocator.
-4. **Add file-backed storage if that consumer needs it.** Prove file lifetime,
+4. **Add file-backed storage if that consumer needs it — first primitive implemented.**
+   Fixed-extent Rust MappedFile does not replace pools or implement a database.
+   Resize, mapped C ABI, hostile-file exclusion enforcement and crash durability
+   are not offered. OS mapping/flush/sync failure injection, huge-file admission
+   and platform proof remain gaps.
+   Prove file lifetime,
    mapping or IO failures, bounds, flush behavior and teardown. Darkbase then owns
    its database publication/recovery policy. A WAL is one possible strategy;
    copy-on-write or atomic snapshot publication may suit a different contract.
