@@ -154,6 +154,7 @@ bool VariableHashMap_init(VariableHashMap *map) {
     return true;
 }
 
+// Release all allocated bucket lists and mark the map inactive.
 void VariableHashMap_shutdown(VariableHashMap *map) {
     if (!map)
         return;
@@ -184,6 +185,7 @@ VariableHashMap *VariableHashMap_0(void) {
     return map;
 }
 
+// Shut down and release an arena-allocated hash map.
 void VariableHashMap_free(VariableHashMap *map) {
     if (!map)
         return;
@@ -222,6 +224,7 @@ bool VariableHashMap_add(VariableHashMap *map, const char *name, uintptr_t point
     return true;
 }
 
+// Find name and optionally write its pointer value; clear output before lookup.
 bool VariableHashMap_get(const VariableHashMap *map, const char *name, uintptr_t *outPointer) {
     if (outPointer)
         *outPointer = 0u;
@@ -246,10 +249,12 @@ bool VariableHashMap_get(const VariableHashMap *map, const char *name, uintptr_t
     return true;
 }
 
+// Report whether name resolves to an entry in the map.
 bool VariableHashMap_contains(const VariableHashMap *map, const char *name) {
     return VariableHashMap_get(map, name, nullptr);
 }
 
+// Visit each stored slot with the caller's context.
 void VariableHashMap_forEach(VariableHashMap *map, VariableHashMapVisitFn fn, void *userdata) {
     if (!map || !(*map).active || !fn)
         return;
@@ -277,6 +282,7 @@ uint32_t VariableHashMap_count(const VariableHashMap *map) {
     return map ? (*map).count : 0u;
 }
 
+// Report whether the map has no entries; a null map is treated as empty.
 bool VariableHashMap_isEmpty(const VariableHashMap *map) {
     if (!map)
         return true;
@@ -301,6 +307,7 @@ void VariableHashMap_toString(const VariableHashMap *map, char *dest, size_t cap
     }
 }
 
+// Format the map's own fields into a bounded structure projection.
 void VariableHashMap_toStringStruct(const VariableHashMap *map, char *dest, size_t cap, bool *outTruncated) {
     if (outTruncated)
         *outTruncated = false;

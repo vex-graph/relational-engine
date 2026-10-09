@@ -148,6 +148,7 @@ static bool grow(void) {
     return true;
 }
 
+// Initialize the process-wide string pool with storage from the given arena.
 bool StringPool_init(MemoryArena *arena) {
     if (!arena)
         return false;
@@ -171,6 +172,7 @@ bool StringPool_init(MemoryArena *arena) {
     return ok;
 }
 
+// Clear pool state and free its arena-backed slot and ordering arrays.
 void StringPool_shutdown(void) {
     SpinLock_lock(&s_lock);
     s_pool.magic = 0;
@@ -189,6 +191,7 @@ void StringPool_shutdown(void) {
 }
 
 ;;INTENTION("23-char names: fixed 32B slots (24B name + 8B self) keep the pool indexable with O(1) validity checks; longer names rejected cold — class/widget/probe names are short by convention and silent truncation would corrupt identity")
+// Find an existing folded name or append it and return its stable slot index.
 int32_t StringPool_intern(const char *str) {
     if (!str || str[0] == '\0')
         return -1;
@@ -231,6 +234,7 @@ int32_t StringPool_intern(const char *str) {
     return (int32_t) idx;
 }
 
+// Find an existing name without insertion, returning -1 when it is not found.
 int32_t StringPool_find(const char *str) {
     if (!str || str[0] == '\0')
         return -1;
@@ -264,6 +268,7 @@ const char *StringPool_name(uint32_t index) {
     return slot ? (*slot).name : nullptr;
 }
 
+// Return the current slot count while the pool is initialized.
 uint32_t StringPool_count(void) {
     SpinLock_lock(&s_lock);
     uint32_t n = s_pool.magic == STRING_POOL_MAGIC ? s_pool.count : 0;
@@ -271,6 +276,7 @@ uint32_t StringPool_count(void) {
     return n;
 }
 
+// Test whether ptr matches a slot's self-link and lies in the pool allocation.
 bool StringPool_isSlot(const void *ptr) {
     if (!ptr)
         return false;

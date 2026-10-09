@@ -99,6 +99,7 @@ Method *Method_3(const char *name, MethodFn invoke, void *target) {
     return self;
 }
 
+// Release an arena-allocated Method record.
 void Method_free(Method *self) {
     if (self != nullptr)
         Memory_free(self);
@@ -112,6 +113,7 @@ uint64_t Method_kind(const Method *self) {
     return Memory_type((void*) self);
 }
 
+// Compare the allocation's recorded type with the requested reflection kind.
 bool Method_check(const Method *self, uint64_t typeId) {
     if (self == nullptr)
         return false;
@@ -137,12 +139,14 @@ bool Method_setName(Method *self, const char *name) {
     return true;
 }
 
+// Replace the callable stored by this Method.
 void Method_setInvoke(Method *self, MethodFn invoke) {
     if (self == nullptr)
         return;
     (*self).invoke = invoke;
 }
 
+// Replace the default receiver/context stored by this Method.
 void Method_setTarget(Method *self, void *target) {
     if (self == nullptr)
         return;
@@ -162,6 +166,7 @@ int Method_getName(const Method *self, char *out, size_t outCap) {
     return (int) len;
 }
 
+// Return the callable, or nullptr for a null Method.
 MethodFn Method_getInvoke(const Method *self) {
     if (self == nullptr)
         return nullptr;
@@ -192,6 +197,7 @@ void Method_toString(const Method *self, char *dest, size_t cap, bool *outTrunca
     }
 }
 
+// Format the Method's own fields into a bounded structure projection.
 void Method_toStringStruct(const Method *self, char *dest, size_t cap, bool *outTruncated) {
     if (outTruncated)
         *outTruncated = false;

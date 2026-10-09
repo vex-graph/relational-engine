@@ -116,6 +116,7 @@ bool Shelf_init(Shelf *shelf) {
     return true;
 }
 
+// Free all cell references and node storage owned by the initialized shelf.
 void Shelf_shutdown(Shelf *shelf) {
     if (!shelf)
         return;
@@ -146,6 +147,7 @@ Shelf *Shelf_0(void) {
     return shelf;
 }
 
+// Shut down and release an arena-allocated shelf.
 void Shelf_free(Shelf *shelf) {
     if (!shelf)
         return;
@@ -155,6 +157,7 @@ void Shelf_free(Shelf *shelf) {
 
 // CORE FUNCTIONS
 
+// Append a node holding a cell address and return its stable row index.
 uint32_t Shelf_addNode(Shelf *shelf, uintptr_t cell) {
     if (!shelf || !(*shelf).active)
         return SHELF_INDEX_NONE;
@@ -169,6 +172,7 @@ uint32_t Shelf_addNode(Shelf *shelf, uintptr_t cell) {
     return index;
 }
 
+// Allocate a typed Cell, transfer it to the shelf, and return its node index.
 uint32_t Shelf_addCell(Shelf *shelf, uint64_t typeId, uintptr_t value) {
     Cell *cell = Cell_2(typeId, value);
     if (!cell)
@@ -179,6 +183,7 @@ uint32_t Shelf_addCell(Shelf *shelf, uint64_t typeId, uintptr_t value) {
     return index;
 }
 
+// Read the cell address at an index, returning zero when the index is invalid.
 uintptr_t Shelf_getCell(const Shelf *shelf, uint32_t index) {
     ShelfNode *row = nodeAt(shelf, index);
     if (!row)
@@ -186,6 +191,7 @@ uintptr_t Shelf_getCell(const Shelf *shelf, uint32_t index) {
     return (*row).cell;
 }
 
+// Read a node's outgoing index edge or SHELF_INDEX_NONE when invalid.
 uint32_t Shelf_getNext(const Shelf *shelf, uint32_t index) {
     ShelfNode *row = nodeAt(shelf, index);
     if (!row)
@@ -193,6 +199,7 @@ uint32_t Shelf_getNext(const Shelf *shelf, uint32_t index) {
     return (*row).next;
 }
 
+// Set a node's outgoing index edge, rejecting an invalid source index.
 bool Shelf_setNext(Shelf *shelf, uint32_t index, uint32_t next) {
     ShelfNode *row = nodeAt(shelf, index);
     if (!row)
@@ -201,6 +208,7 @@ bool Shelf_setNext(Shelf *shelf, uint32_t index, uint32_t next) {
     return true;
 }
 
+// Link one existing node to another by setting its outgoing edge index.
 bool Shelf_link(Shelf *shelf, uint32_t from, uint32_t to) {
     return Shelf_setNext(shelf, from, to);
 }
@@ -224,10 +232,12 @@ uint32_t Shelf_getHead(const Shelf *shelf) {
     return (*shelf).head;
 }
 
+// Return the number of shelf nodes, or zero for a null shelf.
 uint32_t Shelf_count(const Shelf *shelf) {
     return shelf ? (*shelf).count : 0u;
 }
 
+// Report whether the shelf has no nodes; a null shelf is treated as empty.
 bool Shelf_isEmpty(const Shelf *shelf) {
     if (!shelf)
         return true;
@@ -252,6 +262,7 @@ void Shelf_toString(const Shelf *shelf, char *dest, size_t cap, bool *outTruncat
     }
 }
 
+// Format the shelf's own fields into a bounded structure projection.
 void Shelf_toStringStruct(const Shelf *shelf, char *dest, size_t cap, bool *outTruncated) {
     if (outTruncated)
         *outTruncated = false;

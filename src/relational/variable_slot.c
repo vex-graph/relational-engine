@@ -128,6 +128,7 @@ bool VariableSlot_foldName(const char *name, char *out) {
     }
 }
 
+// Map a name's first character to its fixed bucket, or return the invalid value.
 int VariableSlot_bucketOf(char c) {
     if (c >= 'a' && c <= 'z')
         return c - 'a';
@@ -186,6 +187,7 @@ VariableSlot *VariableSlot_2(const char *name, uintptr_t pointer) {
     return self;
 }
 
+// Release a standalone arena-allocated VariableSlot.
 void VariableSlot_free(VariableSlot *self) {
     if (self != nullptr)
         Memory_free(self);
@@ -203,6 +205,7 @@ bool VariableSlot_setName(VariableSlot *self, const char *name) {
     return true;
 }
 
+// Replace the value pointer stored in this slot.
 void VariableSlot_setPointer(VariableSlot *self, uintptr_t pointer) {
     if (self == nullptr)
         return;
@@ -222,18 +225,21 @@ int VariableSlot_getName(const VariableSlot *self, char *out, size_t outCap) {
     return (int) len;
 }
 
+// Return the stored value pointer, or zero for a null slot.
 uintptr_t VariableSlot_getPointer(const VariableSlot *self) {
     if (self == nullptr)
         return 0;
     return (*self).pointer;
 }
 
+// Report whether this slot has no interned name.
 bool VariableSlot_isEmpty(const VariableSlot *self) {
     if (self == nullptr)
         return true;
     return (*self).name[0] == '\0';
 }
 
+// Compare this slot's stored name with the supplied string.
 bool VariableSlot_nameEquals(const VariableSlot *self, const char *name) {
     if (self == nullptr)
         return false;
@@ -266,6 +272,7 @@ void VariableSlot_toString(const VariableSlot *self, char *dest, size_t cap, boo
     }
 }
 
+// Format the slot's own fields into a bounded structure projection.
 void VariableSlot_toStringStruct(const VariableSlot *self, char *dest, size_t cap, bool *outTruncated) {
     if (outTruncated != nullptr)
         *outTruncated = false;
