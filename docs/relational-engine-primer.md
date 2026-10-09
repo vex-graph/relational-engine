@@ -15,10 +15,11 @@ native C infrastructure used by the ecosystem and a separate, developing Rust
 storage API. A working primitive, a passing owner test, and a finished storage
 product are three different milestones.
 
-The earlier description of the new handles as fully "generation-safe" was too
-strong. The current implementation has specific identity defects described below.
-A past green suite did not exercise those cases. This document update records a
-source review, not a fresh runtime certification.
+The earlier handles had identity defects missed by the first tests. Those cases
+now have fixes and executable owner tests: zero is invalid, exhausted slots retire,
+and empty backing release retains history. C can now use Rust-owned aligned byte
+rows through `nio/relational_rows.h`; this is an opt-in storage API, not a rewrite
+of R3–R5 or replacement of native `Memory_*`.
 
 Also, RE is R2 infrastructure, not the R3 database. It need not become a database
 or acquire a WAL to be useful. Database transactions and recovery policy belong to
@@ -188,8 +189,8 @@ inside the storage owner, in exchange for a second language and a maintained ABI
 Costs include compiler/toolchain integration, explicit unsafe code, header drift,
 and restrictions on aliasing. C would simplify language integration but shift more
 lifetime enforcement into conventions, review and tests. Neither language proves
-identity correctness, crash durability or performance. The handle defects below
-are examples of logic errors that Rust can compile without complaint.
+identity correctness, crash durability or performance. The earlier handle defects
+were examples of logic errors that Rust can compile without complaint.
 
 ---
 
@@ -237,25 +238,48 @@ engine now has a generation-tagged **`Handle`**:
 Handle { index: usize, generation: u32 }
 ```
 
-Every slot carries a generation bumped on removal. Access compares the supplied
-generation to the slot's current generation and checks that the slot is occupied.
-This rejects ordinary remove/reuse cases, but **permanent stale rejection is not
-currently delivered**:
+Every slot starts at generation one. Removal advances it; removal at the maximum
+generation retires the slot permanently instead of wrapping. Empty backing release
+keeps generation metadata, so recreation cannot resurrect a removed identity.
+Owner tests exercise zero rejection, ordinary reuse, small-budget exhaustion through
+the same counter logic, backing recreation and allocation failures.
 
-- `Handle::zero()` is `(0, 0)`, and the first insertion into a fresh chunk issues
-  that same pair. The documented invalid sentinel can name a live value.
-- `TypedChunk::bump_generation` wraps back to one. Eventually a previously issued
-  generation can repeat; skipping zero does not prevent resurrection.
-- `TypedPool::release_empty_chunks` discards generation metadata. Recreating the
-  chunk starts at zero again, so an old handle can resolve to a new value.
-- Handles contain no owner identity. A handle from another pool can match; callers
-  must keep handles associated with their original owner.
+Rust `Handle` still has no owner identity: callers keep it with its original
+TypedChunk/TypedPool. The C row-pool API instead uses `RowHandle { owner, index,
+generation, reserved }`. A process-local non-reused owner ID rejects handles from
+another pool, even after destruction/recreation. Racing construction can reject;
+the host retries externally. This is not forgery protection or a persistent ID.
+Raw pointers remain a separate obligation: checks do not make a previously escaped
+pointer safe after removal.
 
-These findings come from `rust/src/nio/{handle,typed_chunk}.rs` and
-`rust/src/struct/typed_pool.rs`. The existing owner tests exercise ordinary reuse,
-but not sentinel rejection, generation exhaustion or stale handles after chunk
-recreation. Raw pointers are a separate obligation: handle checks do not make a
-previously escaped pointer safe after removal.
+### Using Rust storage from C — no consumer rewrite
+
+`RowPool` stores fixed-size **bytes**, not Rust objects. Each pool chooses its row
+size, power-of-two alignment and rows per chunk. Aligned row allocations stay put
+while the directory grows. Add copies input; read copies output; write replaces
+exactly one row; borrow exposes read-only bytes. Embedded pointers/destructors remain
+the C caller's responsibility. All calls require external serialization.
+
+```c
+#include "nio/relational_rows.h"
+
+ReRowPool *rows = nullptr;
+uint64_t value = 42;
+ReRowHandle identity = ReRowHandle_zero();
+uint32_t status = ReRowPool(sizeof(value), _Alignof(uint64_t), &rows);
+if (status == 0)
+    status = re_rows_add(rows, (const uint8_t*) &value, sizeof(value), &identity);
+/* Check status before use. Detach borrowers before destruction. */
+re_rows_drop(rows);
+```
+
+Supply both `src` and `rust/include` include paths and link Cargo's resident
+`librelational_engine_scratchpad.a`. The owner runner does this with a real C
+client. Ordinary `./tools/b build relational_engine` still builds native C IO/NIO,
+not the Rust static library; automatic downstream build wiring is not delivered.
+C consumers keep their language and logic. Rust only owns the selected storage.
+The C client also binds a row address into VariableRegistry and detaches that
+borrower before dropping storage. It is not an R3–R5 application migration.
 
 ### 7.5 Variables — name → value
 
@@ -286,7 +310,8 @@ R2 relational engine -- separate contracts
 
   Native C Memory_*: existing allocator + 16-byte header
   Rust Memory: byte blocks + atomic values, separate opaque C ABI
-  Rust TypedPool: reusable rows + draft generation handles (Rust API)
+  Rust TypedPool: reusable typed rows + owner-local handles (Rust API)
+  Rust RowPool: aligned byte rows + owner-tagged handles (C and Rust API)
   Rust VariableRegistry: stable labels + borrowed value pointers
        |
        +-- calls native C name search over its slot rows
@@ -311,11 +336,15 @@ or every possible implementation name. MappedFile remains a dependency to verify
 before planning a consumer around it. Broader planned areas are described in the
 repo preferences; their implementation is not established by this document.
 
-**Evidence boundary:** the checklist records earlier macOS owner runs, not a new
-run for this documentation update. C-client ASan/UBSan does not instrument Rust.
-Windows execution, Rust sanitizer instrumentation, full fault/concurrency coverage
-and measured performance are not established here. Neither a crate's name nor a
-green summary is a readiness decision.
+**Evidence boundary:** `tests/relational-engine/rust/run.py` exercises registered
+debug/release owners, real C clients and C-side ASan/UBSan. C-client ASan/UBSan does
+not instrument Rust. The separate Rust sanitizer runner skips on this host: the
+installed Apple runtime lacks Rust's ASan v8 version symbol. Windows execution,
+macOS 14 runtime compatibility of the installed Rust standard library, Rust
+sanitizer instrumentation, full fault/concurrency coverage and measured performance
+remain unproved. This host's Rust libraries report a newer deployment version at
+link time; setting a 14.0 target alone does not prove the floor. No whole-engine
+or production-readiness promotion follows from the row-pool tests.
 
 ---
 
@@ -326,9 +355,8 @@ Honest pressure points, so you can push on them:
 1. **The ABI is manual.** Every crossing function restates its contract in a comment.
    A generated header could reduce declaration drift; ownership and lifetime
    contracts would still require review and C-client tests.
-2. **Handles are not yet the C ABI.** Identity currently lives in the Rust API; C
-   callers use the separate memory/registry contracts. Repairing handle identity
-   comes before exposing that typed API to C.
+2. **C row identity is explicit.** RowPool exposes bytes and owner-tagged handles;
+   it does not monomorphize arbitrary Rust types for C or attach ecosystem type IDs.
 3. **Indices vs handles.** Keeping both raw indices and handles is pragmatic but
    leaves a footgun. If you want identity everywhere, the raw index API could be
    demoted to `pub(crate)`.
@@ -342,16 +370,16 @@ Honest pressure points, so you can push on them:
 
 ### A practical roadmap, in dependency order
 
-1. **Repair typed identity.** Reserve a truly invalid sentinel, retain identity
-   history across backing release, and define non-resurrection on exhaustion.
-   Decide whether wrong-owner rejection is offered or caller responsibility.
-   Prove these cases alongside allocation failure and preserved live state.
+1. **Repair typed identity — implemented with owner proof.** Zero is invalid,
+    history survives backing release, and exhaustion retires slots. Rust typed
+    handles remain owner-local; C RowHandle adds wrong-owner rejection.
 2. **Choose the first consumer and its contract.** State what it stores, how long
    pointers live, who may mutate it, and what happens when capacity or allocation
    fails. In-memory storage can be useful without any disk persistence.
-3. **Expose only the required C surface.** Define ownership, layout, status codes,
-   panic/OOM behavior and teardown, then exercise actual C callers. Generic Rust
-   pools do not automatically become a generic C allocator.
+3. **Expose only the required C surface — first slice implemented.** The aligned
+    byte-row pool documents ownership, layout, statuses, fallible storage allocation
+    and teardown. Cold formatting may still abort on OOM; no panic catcher exists.
+    Generic Rust pools do not automatically become a generic C allocator.
 4. **Add file-backed storage if that consumer needs it.** Prove file lifetime,
    mapping or IO failures, bounds, flush behavior and teardown. Darkbase then owns
    its database publication/recovery policy. A WAL is one possible strategy;
@@ -401,10 +429,8 @@ record verbatim would save a process address, not a portable health value.
 
 ---
 
-*Review boundary (2026-10-09): read the constitution and repo/test preferences,
-affected checklist rows, this primer, Rust `nio/{handle,typed_chunk,mem}.rs`,
-`struct/typed_pool.rs`, `variable/variable_registry.rs`, `ffi/memory.rs`, its C
-header, and the typed-chunk/pool owner tests. Inspected native `MemoryHeader`
-declarations and mapped-file filename inventory. This was not a complete native
-IO, atomic-string implementation, Darkbase or cross-platform audit. No runtime
-suite was rerun for this prose-only change.*
+*Review boundary (2026-10-09): storage/handle and C adapter sources, headers,
+registered owner tests and runner were read/updated in this implementation cycle.
+The full Rust owner/C-client runner executed; Rust ASan was attempted and remains
+a toolchain skip. This was not a complete native IO, Darkbase, R3–R5 application,
+cross-platform or oldest-supported-macOS audit.*
