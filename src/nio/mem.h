@@ -52,7 +52,10 @@ typedef struct Block {
 bool Memory_init(size_t totalBytes);
 
 // Allocate nbytes with the given type id stamped in the 16-byte header.
-// Returns the aligned payload pointer, or nullptr on failure.
+// Returns the aligned payload pointer, or nullptr on failure/exhaustion. Backing
+// capacity is selected at construction, a physical resource bound, not a dynamic
+// entity ceiling. No untracked heap fallback; choose a larger owner when needed.
+// Admission rejection is silent; existing blocks and allocation cursor survive.
 void *Memory_alloc(uint64_t typeId, size_t numBytes);
 
 // Grow/shrink a block, preserving contents and type. Returns the new payload
@@ -62,7 +65,8 @@ void *Memory_realloc(void *userPtr, size_t newBytes);
 // Free a block back to its slab pool in O(1) cache-hot time.
 void Memory_free(void *userPtr);
 
-// Free/reset all currently allocated blocks across all slabs in O(1).
+// Reset slab lists and clear used bump storage, invalidating existing headers.
+// Work scales with slab capacity plus used bump bytes; excludes active users.
 void Memory_freeAll(void);
 
 // Metadata accessors: cost a single pointer subtract in O(1) without locks.
@@ -74,16 +78,23 @@ uint64_t Memory_type(void *userPtr);
 // lengths are similar. Foreign, corrupted, or freed pointers fail closed.
 bool Memory_similar(const void *a, const void *b);
 
-// Search: Return the number of active blocks matching typeId.
-// If outArray is not NULL, fills it with up to maxCount payload pointers.
+// Search slabs AND bump blocks. Return total live matches; typeId zero is wildcard.
+// If outArray is not nullptr, fill up to maxCount payload pointers, leaving the
+// tail unchanged. Enumeration excludes mutation; corrupted headers are not a
+// trusted serialization format and a forged checksum is not an identity proof.
 size_t Memory_findAll(uint64_t typeId, void **outArray, size_t maxCount);
 
 // Phase-4 instancing (Arena-B): the process-global allocator above is the
 // DEFAULT arena. Secondary arenas are fully isolated slab sets carved from
 // their own malloc — allocate in B, verify, free B, default untouched.
 // Headers are unchanged (16B, no arena tag), so this is ABI-stable: free
-// routes by address-range lookup across a small registry (default + 3).
+// routes by address-range lookup across a growable registry.
 // Registration happens pre-threads; the hot path takes no extra locks.
+// Initialized disjoint alloc/free use per-region locks. Init/create/destroy,
+// reset/enumeration and shared-block access require caller exclusion. Freed raw
+// addresses have no generations: reuse may alias them; not a stale-handle API.
+// Slab blocks recycle individually. Bump blocks (including small overflow spill)
+// invalidate on free but reclaim capacity only on freeAll, never individually.
 typedef struct MemoryArena MemoryArena;
 
 // The process-global (default) arena, lazily initialized like Memory_alloc.

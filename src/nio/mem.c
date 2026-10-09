@@ -115,6 +115,15 @@
  *   - Transient_getGeneration(void)
  *   - Transient_getBuffer(void)
  *   - Memory_getLifetime(ptr)
+ *
+ * CAPACITY / OWNERSHIP:
+ *   Construction owns all backing; alloc never escapes into libc on exhaustion.
+ *   Exhaustion returns nullptr silently without changing existing blocks.
+ *   Slab slots recycle individually; bump blocks invalidate individually and
+ *   reclaim space only at freeAll. Enumeration includes both storage regions.
+ *   Registry mutation/reset/destroy/metadata enumeration require exclusion;
+ *   initialized disjoint alloc/free may contend on class/bump locks. Raw pointers
+ *   have no generations: reuse can alias an old address. Not stale-handle safety.
  * ============================================================================
  */
 
@@ -301,7 +310,7 @@ static bool arena_init(MemoryArena *a, size_t totalBytes) {
     return true;
 }
 
-/** Allocate a typed payload from a slab, bump region, or malloc fallback. */
+/** Allocate from owner storage only; exhaustion preserves state and rejects. */
 static void *arena_alloc(MemoryArena *a, uint64_t typeId, size_t numBytes) {
     if (!a || !(*a).live)
         return nullptr;
@@ -346,15 +355,7 @@ static void *arena_alloc(MemoryArena *a, uint64_t typeId, size_t numBytes) {
     }
     SpinLock_unlock(&(*a).bumpLock);
 
-    uint8_t *raw = (uint8_t*) malloc(total);
-    if (!raw)
-        return nullptr;
-
-    MemoryHeader *h = (MemoryHeader*) raw;
-    (*h).typeId = typeId;
-    (*h).length = (uint32_t) numBytes;
-    (*h).sugar = header_sugar(typeId, (uint32_t) numBytes);
-    return (void*) (raw + sizeof(MemoryHeader));
+    return nullptr;
 }
 
 /** Validate an in-arena payload header and recycle its slab slot when applicable. */
@@ -376,10 +377,7 @@ static void arena_free(MemoryArena *a, void *userPtr) {
     if ((*a).masterArena && p >= (*a).masterArena + sizeof(MemoryHeader) && p < (*a).masterArena + (*a).masterCapacity)
         in_range = true;
     if (!in_range) {
-        // Malloc-fallback blocks live outside the arena range (malloc regions
-        // never overlap live ones). They are not reclaimed here — same as
-        // before. We cannot safely read their header without a range, so we
-        // reject to avoid the blind read.
+        // Foreign storage is not ours to inspect or release.
         return;
     }
 
@@ -387,16 +385,24 @@ static void arena_free(MemoryArena *a, void *userPtr) {
     if (!header_valid(h))
         return;
 
-    // Size class is a pure function of length — no stored index. Bump-resident
-    // small blocks recycle through the slab freelist of their class (same
-    // observable contract: right-sized memory, counts balance on reuse).
-    // Oversized (bump-carved) blocks invalidate only; bump space rewinds
-    // wholesale on freeAll, never per block.
-    int s = find_slab((*h).length);
+    // Provenance is physical: small spill blocks belong to the bump region,
+    // never a slab list. Recycling them into a slab corrupts counts/enum/reset.
+    SlabClass *slab = nullptr;
+    for (size_t s = 0; s < SLAB_COUNT; s++) {
+        SlabClass *candidate = &(*a).slabs[s];
+        uintptr_t base = (uintptr_t) (*candidate).arena;
+        size_t extent = (size_t) (*candidate).capacity * (*candidate).slot_size;
+        if (u >= base + sizeof(MemoryHeader) && u < base + extent) {
+            if ((u - base) % (*candidate).slot_size != sizeof(MemoryHeader)
+                || (*h).length > (*candidate).slot_size - sizeof(MemoryHeader))
+                return;
+            slab = candidate;
+            break;
+        }
+    }
     (*h).sugar = 0;
-    if (s < 0 || (uint32_t) s >= SLAB_COUNT)
-        return;
-    SlabClass *slab = &(*a).slabs[s];
+    if (!slab)
+        return; // Bump storage is reclaimed wholesale only.
     FreeNode *node = (FreeNode*) userPtr;
 
     SpinLock_lock(&(*slab).lock);
@@ -431,14 +437,14 @@ static void arena_freeAll(MemoryArena *a) {
     }
 
     SpinLock_lock(&(*a).bumpLock);
+    // Clear used headers too: rewinding alone leaves old bump pointers valid.
+    memset((*a).bumpArena, 0, (*a).bumpOffset);
     (*a).bumpOffset = 0;
     SpinLock_unlock(&(*a).bumpLock);
 }
 
 // Free-routing: headers carry no arena tag (ABI-stable by design), so the
-// owner is whoever's master range contains the header. Malloc-fallback
-// blocks live outside every range (malloc regions never overlap live ones)
-// and are not reclaimed here — same as before. Registry writes happen at
+// owner is whoever's master range contains the header. Registry writes happen at
 // create/destroy (pre-threads); reads are lock-free.
 /** Find the live registered arena whose address range contains a valid payload. */
 static MemoryArena *arena_for(void *userPtr) {
@@ -530,6 +536,8 @@ MemoryArena *Memory_defaultArena(void) {
 void *Memory_realloc(void *userPtr, size_t newBytes) {
     if (!userPtr)
         return Memory_alloc(0, newBytes);
+    if (!safe_header(userPtr))
+        return nullptr;
 
     uint64_t typeId = Memory_type(userPtr);
     size_t oldLen = Memory_length(userPtr);
@@ -553,10 +561,7 @@ void Memory_free(void *userPtr) {
     if (!h)
         return;
 
-    // No malloc-fallback branch: safe_header only returns headers inside a
-    // live range, and malloc regions never overlap live ones, so an
-    // out-of-range block cannot arrive here. Malloc-fallback blocks are not
-    // reclaimed — same as before.
+    // Only registered owner storage can reach this free-routing branch.
     MemoryArena *a = arena_for(userPtr);
     if (!a)
         return;
@@ -769,6 +774,8 @@ void *MemoryArena_realloc(MemoryArena *a, void *userPtr, size_t newBytes) {
         return nullptr;
     if (!userPtr)
         return arena_alloc(a, 0, newBytes);
+    if (!safe_header(userPtr))
+        return nullptr;
 
     uint64_t typeId = Memory_type(userPtr);
     size_t oldLen = Memory_length(userPtr);
@@ -795,7 +802,7 @@ void MemoryArena_freeAll(MemoryArena *a) {
     arena_freeAll(a);
 }
 
-/** Enumerate live slab blocks in an arena matching typeId, returning total matches found. */
+/** Enumerate live slab and bump blocks; total matches may exceed output capacity. */
 size_t MemoryArena_findAll(MemoryArena *a, uint64_t typeId, void **outArray, size_t maxCount) {
     size_t count = 0;
     if (!a || !(*a).live)
@@ -819,6 +826,25 @@ size_t MemoryArena_findAll(MemoryArena *a, uint64_t typeId, void **outArray, siz
         }
         SpinLock_unlock(&(*slab).lock);
     }
+    SpinLock_lock(&(*a).bumpLock);
+    size_t offset = 0;
+    while (offset < (*a).bumpOffset) {
+        size_t remaining = (*a).bumpOffset - offset;
+        MemoryHeader *h = (MemoryHeader*) ((*a).bumpArena + offset);
+        if (remaining < sizeof(MemoryHeader))
+            break;
+        size_t length = (*h).length;
+        size_t total = sizeof(MemoryHeader) + ((length + 15u) & ~15ull);
+        if (total > remaining)
+            break;
+        if (header_valid(h) && (typeId == 0 || (*h).typeId == typeId)) {
+            if (outArray && count < maxCount)
+                outArray[count] = (uint8_t*) h + sizeof(MemoryHeader);
+            count++;
+        }
+        offset += total;
+    }
+    SpinLock_unlock(&(*a).bumpLock);
     return count;
 }
 
