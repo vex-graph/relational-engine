@@ -65,6 +65,15 @@ in `tests/test-checklist.md`; a runner's presence is not execution evidence.
 
 ## Not yet proved
 
+The Deliberate Exhaustion and Backend Trust Law now requires thousands of
+simultaneously live allocations across workers where legal. The current contention
+case performs 16,000 operations but retains at most four worker-owned blocks at
+once; its large-live-set exhaustion case is single-threaded. Neither proves the
+combined concurrent-occupancy requirement. Multiple seeded schedules, explicit
+live-address non-overlap under concurrent occupancy, and overlapping pressure
+through exhaustion/recovery remain missing. Existing scoped passes are not
+retroactively promoted by this law.
+
 Windows/macOS 14 runtime, all legal schedules, long-running downstream loads,
 host teardown exclusion, first-use concurrency, adversarial checksum forgery,
 every metadata-corruption traversal, OS allocation pressure, generation-safe raw
