@@ -8,6 +8,7 @@ description = "Learning byte-storage backend with an explicit C boundary"
 
 [dependencies]
 relational-annotations = { path = "annotations" }
+memmap2 = "0.9"
 
 [lib]
 path = "src/lib.rs"
