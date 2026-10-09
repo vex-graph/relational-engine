@@ -3,15 +3,20 @@
 //! without moving survivors. Only occupied slots are read or dropped. All mutation
 //! requires exclusive access; raw pointers expire on removal or owner destruction.
 //! OVERVIEW: fields in order: rows Vec<MaybeUninit<T>> (fixed allocation),
-//! occupied Vec<u64> (one bit per row), generations Vec<u32> (one per row), len usize.
+//! occupied Vec<u64> (one bit per row), generations Vec<u32> (one per row), len usize,
+//! generation_limit u32 (immutable exhaustion bound, default u32::MAX).
 //! Public: new/zero/add/remove/get/get_mut/add_handle/get_handle/get_handle_mut/
-//! remove_handle/generation_at/len/is_empty/get_capacity/is_full, to_string/
-//! to_string_struct. Private: validate_geometry, bump_generation; Drop destroys live rows.
+//! remove_handle/generation_at/len/is_empty/get_capacity/is_full/new_with_generation_limit,
+//! to_string/to_string_struct. Internal: release_backing/has_backing; private:
+//! validate_geometry, bump_generation; Drop destroys live rows.
 //! Invalid geometry and fallible allocations reject before publishing state.
 //! Full add drops the incoming value and preserves existing rows. Raw indices are
 //! reusable locations; the generation-tagged `Handle` surface (`add_handle` /
 //! `get_handle` / `get_handle_mut` / `remove_handle`) is the identity API, so a
-//! handle to a removed-and-reused slot is rejected as stale.
+//! handle to a removed-and-reused slot is rejected as stale within this owner.
+//! Generation zero is never issued. Removing the last permitted generation retires
+//! the slot permanently instead of wrapping. Empty backing release retains identity
+//! metadata; raw indices remain reusable and handles do not identify another owner.
 use super::handle::Handle;
 use super::{projection, storage_error::StorageError};
 use std::mem::MaybeUninit;
@@ -26,6 +31,7 @@ pub struct TypedChunk<T> {
     occupied: Vec<u64>,         // packed occupancy bitmap: one bit per row slot
     generations: Vec<u32>,      // one generation per row slot; bumped on removal so stale handles reject
     len: usize,                 // number of occupied (live) slots
+    generation_limit: u32,      // last issuable generation; zero after removal means retired
 }
 
 impl<T> TypedChunk<T> {
@@ -41,7 +47,13 @@ impl<T> TypedChunk<T> {
 
     /// Allocate fixed typed-row slots and a zeroed occupancy bitmap for `capacity` rows.
     pub fn new(capacity: usize) -> Result<Self, StorageError> {
+        Self::new_with_generation_limit(capacity, u32::MAX)
+    }
+
+    /// Choose a smaller immutable identity budget; exhausting it retires a slot, never wraps.
+    pub fn new_with_generation_limit(capacity: usize, generation_limit: u32) -> Result<Self, StorageError> {
         Self::validate_geometry(capacity)?;
+        if generation_limit == 0 { return Err(StorageError::Layout); }
         let words = capacity.div_ceil(BITMAP_WORD_BITS);
         let mut rows = Vec::new();
         rows.try_reserve_exact(capacity).map_err(|_| StorageError::Allocation)?;
@@ -51,8 +63,8 @@ impl<T> TypedChunk<T> {
         occupied.resize(words, 0);
         let mut generations = Vec::new();
         generations.try_reserve_exact(capacity).map_err(|_| StorageError::Allocation)?;
-        generations.resize(capacity, 0u32);
-        Ok(Self { rows, occupied, generations, len: 0 })
+        generations.resize(capacity, 1u32);
+        Ok(Self { rows, occupied, generations, len: 0, generation_limit })
     }
 
     /// Create a typed chunk using the named default row capacity.
@@ -61,14 +73,25 @@ impl<T> TypedChunk<T> {
     /// Insert into the first free slot and return its reusable pool-local index.
     pub fn add(&mut self, value: T) -> Result<usize, StorageError> {
         if self.is_full() { return Err(StorageError::Capacity); }
+        if !self.has_backing() {
+            let capacity = self.get_capacity();
+            let mut rows = Vec::new();
+            rows.try_reserve_exact(capacity).map_err(|_| StorageError::Allocation)?;
+            rows.resize_with(capacity, MaybeUninit::uninit);
+            self.rows = rows;
+        }
         for (word_index, word) in self.occupied.iter_mut().enumerate() {
-            let bit = (!*word).trailing_zeros() as usize;
-            let index = word_index * BITMAP_WORD_BITS + bit;
-            if bit < BITMAP_WORD_BITS && index < self.rows.len() {
-                self.rows[index].write(value);
-                *word |= 1u64 << bit;
-                self.len += 1;
-                return Ok(index);
+            let mut free = !*word;
+            while free != 0 {
+                let bit = free.trailing_zeros() as usize;
+                let index = word_index * BITMAP_WORD_BITS + bit;
+                free &= free - 1;
+                if index < self.rows.len() && self.generations[index] != 0 {
+                    self.rows[index].write(value);
+                    *word |= 1u64 << bit;
+                    self.len += 1;
+                    return Ok(index);
+                }
             }
         }
         // The private live count and bitmap agree; no public path can reach this.
@@ -106,20 +129,34 @@ impl<T> TypedChunk<T> {
     /// Return whether no slots are occupied.
     pub fn is_empty(&self) -> bool { self.len == 0 }
     /// Return the fixed number of row slots.
-    pub fn get_capacity(&self) -> usize { self.rows.len() }
-    /// Return whether every row slot is occupied.
-    pub fn is_full(&self) -> bool { self.len == self.rows.len() }
+    pub fn get_capacity(&self) -> usize { self.generations.len() }
 
-    /// The generation stored for a row slot (0 while the slot was never freed).
+    /// Return whether all slots are occupied or permanently retired.
+    pub fn is_full(&self) -> bool {
+        self.generations.iter().enumerate().all(|(index, generation)|
+            *generation == 0 || self.occupied[index / BITMAP_WORD_BITS] &
+                (1u64 << (index % BITMAP_WORD_BITS)) != 0)
+    }
+
+    /// Whether the object-row allocation is present (identity metadata is always retained).
+    pub(crate) fn has_backing(&self) -> bool { !self.rows.is_empty() }
+
+    /// Release empty object rows without dropping generation history or geometry.
+    pub(crate) fn release_backing(&mut self) -> bool {
+        if !self.is_empty() || !self.has_backing() { return false; }
+        self.rows = Vec::new();
+        true
+    }
+
+    /// Current generation; zero means retired or out of range, never a live identity.
     pub fn generation_at(&self, index: usize) -> u32 {
         self.generations.get(index).copied().unwrap_or(0)
     }
 
-    // Advance a freed slot's generation so every earlier handle to it goes stale.
-    // Generation 0 is reserved for a never-freed slot, so wrap skips back to 1.
+    // Exhaustion retires the slot; addition below is safe because current < limit.
     fn bump_generation(&mut self, index: usize) {
-        let next = self.generations[index].wrapping_add(1);
-        self.generations[index] = if next == 0 { 1 } else { next };
+        let current = self.generations[index];
+        self.generations[index] = if current == self.generation_limit { 0 } else { current + 1 };
     }
 
     /// Insert and return a generation-tagged identity for the new value.
@@ -157,13 +194,13 @@ impl<T> TypedChunk<T> {
 
     /// Write a bounded value summary and report whether the destination was truncated.
     pub fn to_string(&self, dest: &mut [u8], out_truncated: &mut bool) -> bool {
-        projection::write(format!("TypedChunk(len={}, capacity={})", self.len, self.rows.len()), dest, out_truncated)
+        projection::write(format!("TypedChunk(len={}, capacity={})", self.len, self.get_capacity()), dest, out_truncated)
     }
 
     /// Write a bounded one-level field summary and report destination truncation.
     pub fn to_string_struct(&self, dest: &mut [u8], out_truncated: &mut bool) -> bool {
-        projection::write(format!("TypedChunk {{ rows: [{} slots], occupied: [{} words], len: {} }}",
-            self.rows.len(), self.occupied.len(), self.len), dest, out_truncated)
+        projection::write(format!("TypedChunk {{ rows: [{} backed slots], occupied: [{} words], generations: [{} slots], len: {}, generation_limit: {} }}",
+            self.rows.len(), self.occupied.len(), self.generations.len(), self.len, self.generation_limit), dest, out_truncated)
     }
 }
 
