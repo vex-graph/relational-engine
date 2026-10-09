@@ -6,7 +6,7 @@
 //! view), file Option<File> (retained file), writable bool (admitted access mode).
 //! Exactly one view exists for a nonempty open file; empty files are open/unmapped.
 //! Fields drop in this order: views before file. No escaped descriptor or resize API.
-//! Public: zero/new/open; len/is_empty/is_open/is_writable/as_slice/as_mut_slice;
+//! Public: zero/new/open/from_preallocated; len/is_empty/is_open/is_writable/as_slice/as_mut_slice;
 //! read/write/flush/sync/close; bounded to_string/to_string_struct; MappedFile!().
 //! Invalid ranges preserve bytes; rejected construction publishes no partial owner.
 //! close is idempotent and does NOT flush; explicit sync is a caller decision.
@@ -17,6 +17,7 @@ use super::{mapping_error::MappingError, projection};
 use crate::annotation::{definition, intention, overview};
 use memmap2::{Mmap, MmapMut, MmapOptions};
 use std::{fs::{File, OpenOptions}, path::Path};
+use crate::io::preallocated_file::PreallocatedFile;
 
 #[definition]
 #[overview]
@@ -56,6 +57,25 @@ impl MappedFile {
     /// follow OS open semantics: this API is not a sandbox/path-confinement boundary.
     pub unsafe fn open(path: impl AsRef<Path>, writable: bool) -> Result<Self, MappingError> {
         let file = OpenOptions::new().read(true).write(writable).open(path)?;
+        // SAFETY: caller grants the same external-file exclusion for this handle.
+        unsafe { Self::from_file(file, writable) }
+    }
+
+    /// Consume a successful reservation and map its SAME original file handle,
+    /// never reopening the path. Mapping failure closes this handle but leaves the
+    /// successfully reserved file on disk for explicit caller recovery/removal.
+    ///
+    /// # Safety
+    /// Caller excludes external file mutation/truncation and conflicting aliases
+    /// until close/drop, exactly as for open. Creation alone cannot enforce this.
+    pub unsafe fn from_preallocated(owner: PreallocatedFile) -> Result<Self, MappingError> {
+        let file = owner.into_file().map_err(MappingError::Preallocation)?;
+        // SAFETY: caller grants stable/exclusive file lifetime for the retained handle.
+        unsafe { Self::from_file(file, true) }
+    }
+
+    /// Map a retained descriptor after metadata validation; no pathname race/reopen.
+    unsafe fn from_file(file: File, writable: bool) -> Result<Self, MappingError> {
         let metadata = file.metadata()?;
         if !metadata.is_file() { return Err(MappingError::NotRegularFile); }
         let length = usize::try_from(metadata.len()).map_err(|_| MappingError::Length)?;
