@@ -119,6 +119,22 @@ Procedural FFI files may declare several operations but no owning class.
 
 ### Resident Storage Boundary Law
 
+The opt-in RowPool C API owns runtime-selected aligned byte rows, not native
+Memory blocks or arbitrary Rust types. C sees an opaque owner and a RowHandle
+with process-local owner/index/generation/reserved fields. Zero is invalid;
+generation exhaustion retires slots, and empty backing release retains identity
+history. Rust TypedChunk/TypedPool handles remain owner-local. Counts, backing,
+geometry and owner identity change through construction/add/remove/release only,
+not raw setters that could forge lifetime or identity. This scoped managed
+exception under the Conflict Triage Law and Single Class Per File Law preserves
+ownership truth. Row FFI uses explicit status codes as its observable failure
+channel, matching the engine's existing Rust/FFI policy, not synchronous logging.
+All C calls require live disjoint spans and external serialization; borrowed row
+bytes are read-only and consumers detach before removal/destruction. Ordinary
+row allocation is fallible; cold projections retain Rust's abort-on-OOM behavior.
+Racing owner-ID construction may reject for external retry, never loops. The
+native allocator remains unchanged and default builds do not silently opt in.
+
 The engine is the production IO/NIO implementation owner for Vexspoke and
 database consumers, not their supervisor. Its migrated native IO/NIO borrows
 Vexspoke CPU-only contracts under the constitution's explicit R2 seam; it never
