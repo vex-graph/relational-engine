@@ -10,6 +10,9 @@ description = "Learning byte-storage backend with an explicit C boundary"
 relational-annotations = { path = "annotations" }
 memmap2 = "0.9"
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [lib]
 path = "src/lib.rs"
 crate-type = ["rlib", "staticlib"]
