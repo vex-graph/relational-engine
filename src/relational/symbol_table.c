@@ -115,6 +115,7 @@ static int32_t slot_var(SymbolTable *v, int32_t slot) {
     return bySlot[slot];
 }
 
+// Grow the pool-slot-to-variable index table to cover the requested slot.
 static bool ensure_byslot(SymbolTable *v, uint32_t need) {
     if (need < (*v).bySlotCap)
         return true;
@@ -138,6 +139,7 @@ static bool ensure_byslot(SymbolTable *v, uint32_t need) {
     return true;
 }
 
+// Initialize a registry and its shared string pool using the default arena.
 bool SymbolTable_init(SymbolTable *v) {
     if (!v)
         return false;
@@ -155,6 +157,7 @@ bool SymbolTable_init(SymbolTable *v) {
     return true;
 }
 
+// Release registry-owned arrays and mark the registry inactive.
 void SymbolTable_shutdown(SymbolTable *v) {
     if (!v || !(*v).active)
         return;
@@ -168,6 +171,7 @@ void SymbolTable_shutdown(SymbolTable *v) {
     (*v).active = false;
 }
 
+// Intern and register a validated name, returning its append-only row id.
 int32_t SymbolTable_instant(SymbolTable *v, const char *name, uint32_t classId, uintptr_t targetPointer) {
     if (!v || !(*v).active) {
         fprintf(stderr, "[variable] instant: inactive registry\n");
@@ -222,6 +226,7 @@ int32_t SymbolTable_instant(SymbolTable *v, const char *name, uint32_t classId, 
     return (int32_t) id;
 }
 
+// Resolve a normalized name to its registered row id, or -1 when absent.
 int32_t SymbolTable_getId(SymbolTable *v, const char *name) {
     if (!v || !(*v).active || !name)
         return -1;
@@ -234,6 +239,7 @@ int32_t SymbolTable_getId(SymbolTable *v, const char *name) {
     return slot_var(v, slot);
 }
 
+// Rename a registered row after validating and interning its replacement name.
 bool SymbolTable_rename(SymbolTable *v, const char *oldName, const char *newName) {
     if (!v || !(*v).active) {
         fprintf(stderr, "[variable] rename: inactive registry\n");
@@ -279,6 +285,7 @@ bool SymbolTable_rename(SymbolTable *v, const char *oldName, const char *newName
     return true;
 }
 
+// Count matching class rows and write up to cap row ids when output is supplied.
 size_t SymbolTable_findByClass(SymbolTable *v, uint32_t classId, int32_t *outIds, size_t cap) {
     if (!v || !(*v).active)
         return 0;
@@ -294,11 +301,13 @@ size_t SymbolTable_findByClass(SymbolTable *v, uint32_t classId, int32_t *outIds
     return total;
 }
 
+// Read the stored target pointer, returning zero for an invalid row id.
 uintptr_t SymbolTable_getPointer(SymbolTable *v, int32_t varId) {
     SymbolRow *row = row_at(v, varId);
     return row ? (*row).pointer : 0;
 }
 
+// Replace a row's target pointer; invalid row ids leave the registry unchanged.
 void SymbolTable_setPointer(SymbolTable *v, int32_t varId, uintptr_t targetPointer) {
     SymbolRow *row = row_at(v, varId);
     if (!row)
@@ -306,6 +315,7 @@ void SymbolTable_setPointer(SymbolTable *v, int32_t varId, uintptr_t targetPoint
     (*row).pointer = targetPointer;
 }
 
+// Replace the target pointer only when the row still contains expected.
 bool SymbolTable_compareAndSetPointer(SymbolTable *v, int32_t varId, uintptr_t expected, uintptr_t newPointer) {
     SymbolRow *row = row_at(v, varId);
     if (!row)
@@ -316,11 +326,13 @@ bool SymbolTable_compareAndSetPointer(SymbolTable *v, int32_t varId, uintptr_t e
     return true;
 }
 
+// Read a row's class id, returning zero for an invalid row id.
 uint32_t SymbolTable_getClassId(SymbolTable *v, int32_t varId) {
     SymbolRow *row = row_at(v, varId);
     return row ? (*row).classId : 0;
 }
 
+// Copy a row's pooled name to out when its full NUL-terminated form fits.
 int SymbolTable_getName(SymbolTable *v, int32_t varId, char *out, size_t outCap) {
     SymbolRow *row = row_at(v, varId);
     if (!row || !out)
@@ -335,6 +347,7 @@ int SymbolTable_getName(SymbolTable *v, int32_t varId, char *out, size_t outCap)
     return (int)len;
 }
 
+// Return the number of registered rows, or zero for an inactive registry.
 size_t SymbolTable_getActiveCount(SymbolTable *v) {
     if (!v || !(*v).active)
         return 0;

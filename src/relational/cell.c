@@ -96,6 +96,7 @@ Cell *Cell_2(uint64_t typeId, uintptr_t value) {
     return instant(typeId, value);
 }
 
+// Release the arena block containing this identity cell.
 void Cell_free(Cell *cell) {
     if (cell)
         Memory_free(cell);
@@ -109,6 +110,7 @@ uint64_t Cell_typeId(const Cell *cell) {
     return Memory_type((void*) cell);
 }
 
+// Compare the cell header's type id with the requested identity.
 bool Cell_check(const Cell *cell, uint64_t typeId) {
     if (!cell)
         return false;
@@ -151,6 +153,7 @@ void Cell_toString(const Cell *cell, char *dest, size_t cap, bool *outTruncated)
     }
 }
 
+// Format the payload fields into a bounded structure projection.
 void Cell_toStringStruct(const Cell *cell, char *dest, size_t cap, bool *outTruncated) {
     if (outTruncated)
         *outTruncated = false;
