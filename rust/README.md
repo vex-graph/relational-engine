@@ -1,5 +1,19 @@
 # Rust interpretation
 
+## Current State
+
+R2 storage backend with opt-in C interfaces, not a consumer rewrite or native
+Memory allocator replacement. The new aligned byte-row RowPool and repaired typed
+handles have macOS arm64 debug/release Rust owners and real C-client proof through
+`python3 tests/relational-engine/rust/run.py`. Rust ASan currently skips for missing
+compatible runtime; Windows, macOS 14 runtime compatibility, performance and
+downstream R3–R5 migration remain unproved.
+
+C includes `nio/relational_rows.h` (engine src + rust/include paths) and links
+the Cargo static library. See `include/relational_engine/row_pool.h` for exact
+geometry, statuses, borrow lifetime, serialization and teardown contracts. Storage
+is aligned flat bytes, not Box-per-row or arbitrary Rust object construction.
+
 This package implements a small learning backend, not a port of Vexspoke's
 allocator. `src/nio/mem.rs` owns heap-backed byte blocks, `src/primitives/string.rs`
 projects UTF-8 Bytes, and `src/ffi/memory.rs` exposes an opaque C owner with
@@ -118,7 +132,12 @@ These locations are NOT generation-tagged handles: a reused index can name a
 different object. No stale raw-pointer rejection is claimed. This is typed Rust
 storage, not yet a type registry or compatible C allocator boundary.
 
-The proposed 16-byte identity slots/2 MiB identity chunks, generation validation,
+Separate add_handle/get_handle/get_handle_mut/remove_handle operations validate
+owner-local generations: zero is invalid, exhaustion retires slots, and reclamation
+retains identity metadata. The new RowPool byte API adds explicit owner identity
+for C callers; it is not a compatible native Memory allocator.
+
+The proposed 16-byte identity slots/2 MiB identity chunks,
 1 MiB optional-name chunks, bulk and scratch APIs remain future work. Identity
 metadata encoding is deliberately not finalized. No compaction, automatic schema
 migration or concurrent allocation is introduced. Two registered typed owner
@@ -165,3 +184,12 @@ The constructor follows Rust's abort-on-OOM Box policy. Vec-to-box
 conversion may allocate. These cold operations are not real-time safe. Vexspoke
 CPU consumers now use engine-owned native IO/NIO; this separate Rust byte API
 is not an automatic replacement of their allocator or a completed R5 migration.
+
+## Scope and Limitations
+
+Rust owns selected storage and exposes C operations without converting consumers
+to Rust. This slice does not provide database transactions, disk durability,
+ecosystem type/header parity, hot allocation guarantees, internal shared mutation
+or automatic schema migration. Caller serialization and resident-engine lifetime
+are mandatory; arbitrary/stale pointers are outside the C ABI contract. Current
+toolchain sanitizer and macOS floor gaps are stated in Current State.
