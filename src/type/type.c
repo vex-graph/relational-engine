@@ -217,6 +217,8 @@ uint64_t Type_arch(uint64_t classId) {
         return ARCH_APIHAVEN;
     if (proj == PROJ_DARKBASE)
         return ARCH_DARKBASE;
+    if (proj == PROJ_SAMPLERATE)
+        return ARCH_SAMPLERATE;
     // Bare ids carry no project byte: with per-project numbering they can only
     // mean vexspoke's own class space. Cross-project code passes full ids.
     return ARCH_VEXSPOKE;

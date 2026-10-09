@@ -72,6 +72,7 @@
 #define PROJ_API_HAVEN           0x0'05'0'0'0'0000'000000ULL
 #define PROJ_DARKBASE            0x0'06'0'0'0'0000'000000ULL
 #define PROJ_RELATIONAL_ENGINE   0x0'07'0'0'0'0000'000000ULL
+#define PROJ_SAMPLERATE          0x0'08'0'0'0'0000'000000ULL
 
 #define MOD_GLOBAL     0x0'00'1'0'0'0000'000000ULL
 #define MOD_LOCALE     0x0'00'2'0'0'0000'000000ULL
@@ -93,6 +94,7 @@
 #define ARCH_GRAPHVEX  4u
 #define ARCH_APIHAVEN  5u
 #define ARCH_DARKBASE  6u
+#define ARCH_SAMPLERATE 7u
 
 // Compose a full type id from project + form + class id. Every id carries the
 // reserved BE6C "векс" sugar (the standard encoding).
