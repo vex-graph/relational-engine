@@ -1,7 +1,7 @@
 //! DEFINITION: TypedPool lazily allocates TypedChunks of one Rust type. A flat
 //! directory may move, but live object allocations never do. Removal reuses holes;
-//! explicit empty-chunk release keeps directory positions so survivors keep indices.
-//! OVERVIEW: chunks Vec<Option<TypedChunk<T>>> (stable directory positions),
+//! explicit empty-chunk release retains directory positions and generation history.
+//! OVERVIEW: chunks Vec<TypedChunk<T>> (stable directory positions + retained history),
 //! rows_per_chunk usize (immutable geometry), len usize (total live count).
 //! Public: new/zero/add/remove/get/get_mut/add_handle/get_handle/get_handle_mut/
 //! remove_handle/release_empty_chunks/get_chunk_count/get_rows_per_chunk/len/
@@ -15,7 +15,7 @@
 use crate::nio::{handle::Handle, typed_chunk::{TypedChunk, TYPED_CHUNK_ROWS_DEFAULT}, storage_error::StorageError, projection};
 
 pub struct TypedPool<T> {
-    chunks: Vec<Option<TypedChunk<T>>>,  // lazy chunk directory; a released chunk stays None in place
+    chunks: Vec<TypedChunk<T>>,         // lazy directory; released row backing retains generation metadata
     rows_per_chunk: usize,               // fixed row capacity of every chunk (immutable geometry)
     len: usize,                          // total live values across all chunks
 }
@@ -34,25 +34,28 @@ impl<T> TypedPool<T> {
     pub fn add(&mut self, value: T) -> Result<usize, StorageError> {
         let next_len = self.len.checked_add(1).ok_or(StorageError::Capacity)?;
         // Reuse all allocated holes before allocating another chunk.
-        for (chunk_index, entry) in self.chunks.iter_mut().enumerate() {
-            if let Some(chunk) = entry {
-                if !chunk.is_full() {
-                    let index = chunk_index * self.rows_per_chunk + chunk.add(value)?;
-                    self.len = next_len;
-                    return Ok(index);
-                }
+        for (chunk_index, chunk) in self.chunks.iter_mut().enumerate() {
+            if chunk.has_backing() && !chunk.is_full() {
+                let index = chunk_index * self.rows_per_chunk + chunk.add(value)?;
+                self.len = next_len;
+                return Ok(index);
             }
         }
-        let chunk_index = self.chunks.iter().position(Option::is_none).unwrap_or(self.chunks.len());
+        let chunk_index = self.chunks.iter().position(|chunk| !chunk.has_backing() && !chunk.is_full())
+            .unwrap_or(self.chunks.len());
         let base = chunk_index.checked_mul(self.rows_per_chunk).ok_or(StorageError::Capacity)?;
         base.checked_add(self.rows_per_chunk - 1).ok_or(StorageError::Capacity)?;
         if chunk_index == self.chunks.len() {
             self.chunks.try_reserve(1).map_err(|_| StorageError::Allocation)?;
         }
-        let mut chunk = TypedChunk::new(self.rows_per_chunk)?;
-        let index = base + chunk.add(value)?;
-        if chunk_index == self.chunks.len() { self.chunks.push(Some(chunk)); }
-        else { self.chunks[chunk_index] = Some(chunk); }
+        let index = if chunk_index == self.chunks.len() {
+            let mut chunk = TypedChunk::new(self.rows_per_chunk)?;
+            let index = base + chunk.add(value)?;
+            self.chunks.push(chunk);
+            index
+        } else {
+            base + self.chunks[chunk_index].add(value)?
+        };
         self.len = next_len;
         Ok(index)
     }
@@ -60,7 +63,7 @@ impl<T> TypedPool<T> {
     /// Remove a live value and return ownership to the caller; the vacant index may later be reused.
     pub fn remove(&mut self, index: usize) -> Result<T, StorageError> {
         let chunk = self.chunks.get_mut(index / self.rows_per_chunk)
-            .and_then(Option::as_mut).ok_or(StorageError::Bounds)?;
+            .ok_or(StorageError::Bounds)?;
         let value = chunk.remove(index % self.rows_per_chunk)?;
         self.len -= 1;
         Ok(value)
@@ -68,33 +71,32 @@ impl<T> TypedPool<T> {
 
     /// Borrow a live value by pool-local index, or return `None` when absent.
     pub fn get(&self, index: usize) -> Option<&T> {
-        self.chunks.get(index / self.rows_per_chunk)?.as_ref()?.get(index % self.rows_per_chunk)
+        self.chunks.get(index / self.rows_per_chunk)?.get(index % self.rows_per_chunk)
     }
 
     /// Mutably borrow a live value by pool-local index, or return `None` when absent.
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
-        self.chunks.get_mut(index / self.rows_per_chunk)?.as_mut()?.get_mut(index % self.rows_per_chunk)
+        self.chunks.get_mut(index / self.rows_per_chunk)?.get_mut(index % self.rows_per_chunk)
     }
 
     /// Insert and return a generation-tagged identity for the new value.
     pub fn add_handle(&mut self, value: T) -> Result<Handle, StorageError> {
         let index = self.add(value)?;
-        let chunk = self.chunks[index / self.rows_per_chunk].as_ref()
-            .ok_or(StorageError::Bounds)?;
+        let chunk = &self.chunks[index / self.rows_per_chunk];
         Ok(Handle::new(index, chunk.generation_at(index % self.rows_per_chunk)))
     }
 
     /// Borrow the value a live handle names; a stale or out-of-range handle returns `None`.
     pub fn get_handle(&self, handle: Handle) -> Option<&T> {
         let index = handle.index();
-        let chunk = self.chunks.get(index / self.rows_per_chunk)?.as_ref()?;
+        let chunk = self.chunks.get(index / self.rows_per_chunk)?;
         chunk.get_handle(Handle::new(index % self.rows_per_chunk, handle.generation()))
     }
 
     /// Mutably borrow the value a live handle names; a stale handle returns `None`.
     pub fn get_handle_mut(&mut self, handle: Handle) -> Option<&mut T> {
         let index = handle.index();
-        let chunk = self.chunks.get_mut(index / self.rows_per_chunk)?.as_mut()?;
+        let chunk = self.chunks.get_mut(index / self.rows_per_chunk)?;
         chunk.get_handle_mut(Handle::new(index % self.rows_per_chunk, handle.generation()))
     }
 
@@ -102,7 +104,7 @@ impl<T> TypedPool<T> {
     pub fn remove_handle(&mut self, handle: Handle) -> Result<T, StorageError> {
         let index = handle.index();
         let chunk = self.chunks.get_mut(index / self.rows_per_chunk)
-            .and_then(Option::as_mut).ok_or(StorageError::Bounds)?;
+            .ok_or(StorageError::Bounds)?;
         let value = chunk.remove_handle(Handle::new(index % self.rows_per_chunk, handle.generation()))?;
         self.len -= 1;
         Ok(value)
@@ -111,9 +113,8 @@ impl<T> TypedPool<T> {
     /// Release backing allocations only; retain directory positions for survivors.
     pub fn release_empty_chunks(&mut self) -> usize {
         let mut released = 0;
-        for entry in &mut self.chunks {
-            if entry.as_ref().is_some_and(TypedChunk::is_empty) {
-                *entry = None;
+        for chunk in &mut self.chunks {
+            if chunk.release_backing() {
                 released += 1;
             }
         }
@@ -121,7 +122,7 @@ impl<T> TypedPool<T> {
     }
 
     /// Return the number of allocated chunks, excluding released empty directory entries.
-    pub fn get_chunk_count(&self) -> usize { self.chunks.iter().filter(|entry| entry.is_some()).count() }
+    pub fn get_chunk_count(&self) -> usize { self.chunks.iter().filter(|chunk| chunk.has_backing()).count() }
     /// Return the fixed row capacity of each allocated chunk.
     pub fn get_rows_per_chunk(&self) -> usize { self.rows_per_chunk }
     /// Return the number of live values in the pool.
