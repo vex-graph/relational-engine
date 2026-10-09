@@ -98,6 +98,7 @@ Field *Field_4(const char *name, VariableReadFn read, FieldSetFn set, void *targ
     return self;
 }
 
+// Release an arena-allocated Field record; embedded fields are not freed here.
 void Field_free(Field *self) {
     if (self != nullptr)
         Memory_free(self);
@@ -111,6 +112,7 @@ uint64_t Field_kind(const Field *self) {
     return Memory_type((void*) self);
 }
 
+// Compare the allocation's recorded type with the requested reflection kind.
 bool Field_check(const Field *self, uint64_t typeId) {
     if (self == nullptr)
         return false;
@@ -130,6 +132,7 @@ void *Field_read(Field *self, void *receiver) {
     return Variable_read(variable, receiver);
 }
 
+// Invoke the setter for receiver and value when this Field has one.
 void Field_write(Field *self, void *receiver, void *value) {
     if (self == nullptr || (*self).set == nullptr)
         return;
@@ -145,6 +148,7 @@ bool Field_setName(Field *self, const char *name) {
     return Variable_setName(variable, name);
 }
 
+// Replace the embedded Variable's reader callback.
 void Field_setRead(Field *self, VariableReadFn read) {
     if (self == nullptr)
         return;
@@ -152,12 +156,14 @@ void Field_setRead(Field *self, VariableReadFn read) {
     Variable_setRead(variable, read);
 }
 
+// Replace this Field's setter callback.
 void Field_setSet(Field *self, FieldSetFn set) {
     if (self == nullptr)
         return;
     (*self).set = set;
 }
 
+// Replace the target stored by the embedded Variable.
 void Field_setTarget(Field *self, void *target) {
     if (self == nullptr)
         return;
@@ -174,6 +180,7 @@ int Field_getName(const Field *self, char *out, size_t outCap) {
     return Variable_getName(variable, out, outCap);
 }
 
+// Return the embedded reader callback, or nullptr for a null Field.
 VariableReadFn Field_getRead(const Field *self) {
     if (self == nullptr)
         return nullptr;
@@ -181,6 +188,7 @@ VariableReadFn Field_getRead(const Field *self) {
     return Variable_getRead(variable);
 }
 
+// Return the setter callback, or nullptr for a null Field.
 FieldSetFn Field_getSet(const Field *self) {
     if (self == nullptr)
         return nullptr;
@@ -213,6 +221,7 @@ void Field_toString(const Field *self, char *dest, size_t cap, bool *outTruncate
     }
 }
 
+// Format this Field and its one-level Variable value into a bounded projection.
 void Field_toStringStruct(const Field *self, char *dest, size_t cap, bool *outTruncated) {
     if (outTruncated)
         *outTruncated = false;

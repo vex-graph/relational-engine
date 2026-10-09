@@ -58,6 +58,7 @@
  * ============================================================================
  */
 
+// Lazily create the stable method-row list owned by this Class.
 static bool ensureMethods(Class *self) {
     if ((*self).methods)
         return true;
@@ -114,6 +115,7 @@ Class *Class_3(const char *name, Struct *layout, ClassConstructFn construct) {
     return self;
 }
 
+// Release owned method rows and the arena-allocated Class record.
 void Class_free(Class *self) {
     if (self == nullptr)
         return;
@@ -130,6 +132,7 @@ uint64_t Class_kind(const Class *self) {
     return Memory_type((void*) self);
 }
 
+// Compare the allocation's recorded type with the requested reflection kind.
 bool Class_check(const Class *self, uint64_t typeId) {
     if (self == nullptr)
         return false;
@@ -142,6 +145,7 @@ void *Class_construct(Class *self, void *arg) {
     return (*self).construct(arg);
 }
 
+// Copy a method into the stable list and return its assigned index.
 uint32_t Class_addMethod(Class *self, const Method *method) {
     if (self == nullptr || method == nullptr || (*self).methods == nullptr)
         return REFLECT_CLASS_METHOD_NONE;
@@ -162,6 +166,7 @@ Method *Class_getMethod(const Class *self, uint32_t index) {
     return (Method*) ChunkedList_slot((*self).methods, index);
 }
 
+// Visit each extant method row in index order with caller context.
 void Class_forEachMethod(Class *self, ClassMethodVisitFn fn, void *userdata) {
     if (self == nullptr || fn == nullptr || (*self).methods == nullptr)
         return;
@@ -186,12 +191,14 @@ bool Class_setName(Class *self, const char *name) {
     return true;
 }
 
+// Replace the borrowed Struct layout associated with this Class.
 void Class_setLayout(Class *self, Struct *layout) {
     if (self == nullptr)
         return;
     (*self).layout = layout;
 }
 
+// Replace the constructor callback associated with this Class.
 void Class_setConstruct(Class *self, ClassConstructFn construct) {
     if (self == nullptr)
         return;
@@ -206,12 +213,14 @@ Struct *Class_getLayout(const Class *self) {
     return (*self).layout;
 }
 
+// Return the constructor callback, or nullptr for a null Class.
 ClassConstructFn Class_getConstruct(const Class *self) {
     if (self == nullptr)
         return nullptr;
     return (*self).construct;
 }
 
+// Copy the folded class name when the complete NUL-terminated value fits.
 int Class_getName(const Class *self, char *out, size_t outCap) {
     if (self == nullptr || out == nullptr || outCap == 0u)
         return -1;
@@ -223,6 +232,7 @@ int Class_getName(const Class *self, char *out, size_t outCap) {
     return (int) len;
 }
 
+// Return the number of methods currently stored on this Class.
 uint32_t Class_methodCount(const Class *self) {
     return self ? (*self).methodCount : 0u;
 }
@@ -246,6 +256,7 @@ void Class_toString(const Class *self, char *dest, size_t cap, bool *outTruncate
     }
 }
 
+// Format the Class's own fields into a bounded structure projection.
 void Class_toStringStruct(const Class *self, char *dest, size_t cap, bool *outTruncated) {
     if (outTruncated)
         *outTruncated = false;

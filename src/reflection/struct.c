@@ -100,6 +100,7 @@ Struct *Struct_1(const char *name) {
     return self;
 }
 
+// Release the owned field-row list and arena-allocated Struct record.
 void Struct_free(Struct *self) {
     if (self == nullptr)
         return;
@@ -116,12 +117,14 @@ uint64_t Struct_kind(const Struct *self) {
     return Memory_type((void*) self);
 }
 
+// Compare the allocation's recorded type with the requested reflection kind.
 bool Struct_check(const Struct *self, uint64_t typeId) {
     if (self == nullptr)
         return false;
     return Memory_type((void*) self) == typeId;
 }
 
+// Copy a Field into the stable row list and return its assigned index.
 uint32_t Struct_add(Struct *self, const Field *field) {
     if (self == nullptr || field == nullptr || (*self).fields == nullptr)
         return REFLECT_STRUCT_INDEX_NONE;
@@ -142,6 +145,7 @@ Field *Struct_get(const Struct *self, uint32_t index) {
     return (Field*) ChunkedList_slot((*self).fields, index);
 }
 
+// Visit field rows in index order, passing each index and caller context.
 void Struct_forEach(Struct *self, StructVisitFn fn, void *userdata) {
     if (self == nullptr || fn == nullptr || (*self).fields == nullptr)
         return;
@@ -179,10 +183,12 @@ int Struct_getName(const Struct *self, char *out, size_t outCap) {
     return (int) len;
 }
 
+// Return the number of stored fields, or zero for a null Struct.
 uint32_t Struct_count(const Struct *self) {
     return self ? (*self).count : 0u;
 }
 
+// Report whether the Struct has no fields; a null Struct is treated as empty.
 bool Struct_isEmpty(const Struct *self) {
     if (self == nullptr)
         return true;
@@ -208,6 +214,7 @@ void Struct_toString(const Struct *self, char *dest, size_t cap, bool *outTrunca
     }
 }
 
+// Format the Struct's own fields into a bounded structure projection.
 void Struct_toStringStruct(const Struct *self, char *dest, size_t cap, bool *outTruncated) {
     if (outTruncated)
         *outTruncated = false;
