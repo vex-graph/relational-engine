@@ -15,6 +15,7 @@ use crate::nio::mem::Memory;
 use crate::nio::memory_error::MemoryError;
 
 #[unsafe(no_mangle)]
+/// Allocate a new opaque memory owner for the C ABI.
 pub extern "C" fn re_memory_new() -> *mut Memory {
     // Box allocation follows Rust's process-level OOM policy (may abort).
     Box::into_raw(Box::new(Memory::new()))
