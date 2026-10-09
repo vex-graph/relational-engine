@@ -33,6 +33,13 @@ exclusion have passing macOS arm64 debug/release owners and intended compiler
 rejections through `tests/relational-engine/rust/run.py`. Mapping is not a database
 transaction or hot arena; the proof gaps below still apply.
 
+**Physical preallocation slice:** Rust `io::PreallocatedFile` creates a new private
+file, reserves its requested disk extent and checks allocated OS blocks. No sparse
+fallback. `MappedFile::from_preallocated` consumes the original handle for writable
+offset access. Real macOS arm64 owners cover decimal 1 GB reservation, persisted
+bit changes and failure cleanup/retry. Linux source exists but is unproven;
+Windows explicitly returns Unsupported.
+
 **Stubbed, draft, or planned:** mapping resize/C ABI; buffered readers/writers and
 FFF-style gathering/indexing in `io/`; `compress`/`virtual` modules;
 manifest-backed persistence (discussion, not implemented durable snapshots or
@@ -150,6 +157,29 @@ No b configuration selects the CMake adapter.
 
 ### Persistent file views (Rust)
 
+`PreallocatedFile!(path, length)` creates a NEW file, preserving existing
+destinations. macOS uses `F_PREALLOCATE` with `F_ALLOCATEALL`; Linux uses kernel
+`fallocate`. Reservation/EOF/allocation-query failure removes the new artifact;
+cleanup failure reports both errors. Parents must already exist and remain
+trusted/stable during creation and cleanup. Unix mode starts at 0600. No automatic
+directory creation, Application Support policy or silent sparse fallback exists.
+
+Applications can choose
+`~/Library/Application Support/vexgraph/<app>/storage.bin`, reserve 1,000,000,000
+bytes (decimal 1 GB), and retain the mapping until shutdown. The file exists in
+Finder; mmap does not make the entire GB resident RAM. Checked offset writes and
+bit changes use the same fixed extent. `MappedFile::from_preallocated(owner)`
+consumes the original descriptor without reopening its path, requiring the same
+unsafe external-file exclusion as ordinary mapping admission.
+
+**APFS copy-on-write, snapshots, quotas and device errors can still require more
+space or fail on later edits.** Initial physical reservation is not a forever-space,
+transaction or crash-durability guarantee. Success followed by mapping failure
+leaves the reserved artifact for caller recovery. Real reservation and injected
+stage-failure owners live under `tests/relational-engine/rust/io/`; OS mapping/
+sync/cleanup-error injection and other-host runtime proof remain gaps. See
+`rust/README.md` for the Application Support example.
+
 `MappedFile!(path)` opens read-only; `MappedFile!(path, true)` opens shared
 read/write. Both require an explicit unsafe block: the caller must prevent other
 access that mutates/truncates the file or violates writable exclusivity until
@@ -219,11 +249,17 @@ code/storage remain resident across consumer reloads; value replacement is not
 automatic record schema migration.
 
 Run `python3 tests/relational-engine/native_run.py` for strict optimized native
-owners and ASan/UBSan with assertions active. Eleven owners execute in each
-configuration; the clipboard mutation owner explicitly skips without permission.
-HotFileSys remains a draft no-op, not an implemented watcher. Native owner proof
-also covers scratch overflow rejection and child-table reap/reuse accounting.
-See the checklist for exact scope; no Windows, performance or live reload claim.
+owners, release-like builds without scratch poisoning, and ASan/UBSan with
+assertions active. Twelve owners execute per configuration; the clipboard
+mutation owner explicitly skips without permission. The native allocator now
+rejects physical backing exhaustion instead of returning untracked heap blocks.
+Its exhaustion supplement covers all seven slab classes, bump spill, copied-byte
+preservation, enumeration/reset, construction/registry allocation failures and
+seeded mixed-size histories. Focused TSan uses `--owner mem_exhaustion_test
+--mode thread`; its scope is initialized disjoint alloc/free, not concurrent
+registry mutation or reset. See [native memory proof](docs/native-memory-proof.md)
+and the checklist for actual execution and remaining gaps. HotFileSys remains a
+draft no-op. No Windows, performance or live reload claim is implied.
 
 ## Scope and Limitations
 
