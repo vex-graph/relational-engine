@@ -99,6 +99,7 @@ Variable *Variable_3(const char *name, VariableReadFn read, void *target) {
     return self;
 }
 
+// Release an arena-allocated Variable record; embedded values remain borrowed.
 void Variable_free(Variable *self) {
     if (self != nullptr)
         Memory_free(self);
@@ -112,6 +113,7 @@ uint64_t Variable_kind(const Variable *self) {
     return Memory_type((void*) self);
 }
 
+// Compare the allocation's recorded type with the requested reflection kind.
 bool Variable_check(const Variable *self, uint64_t typeId) {
     if (self == nullptr)
         return false;
@@ -137,12 +139,14 @@ bool Variable_setName(Variable *self, const char *name) {
     return true;
 }
 
+// Replace the callback used to read this Variable's value.
 void Variable_setRead(Variable *self, VariableReadFn read) {
     if (self == nullptr)
         return;
     (*self).read = read;
 }
 
+// Replace the callback context or value target stored by this Variable.
 void Variable_setTarget(Variable *self, void *target) {
     if (self == nullptr)
         return;
@@ -162,6 +166,7 @@ int Variable_getName(const Variable *self, char *out, size_t outCap) {
     return (int) len;
 }
 
+// Return the reader callback, or nullptr for a null Variable.
 VariableReadFn Variable_getRead(const Variable *self) {
     if (self == nullptr)
         return nullptr;
@@ -192,6 +197,7 @@ void Variable_toString(const Variable *self, char *dest, size_t cap, bool *outTr
     }
 }
 
+// Format the Variable's own fields into a bounded structure projection.
 void Variable_toStringStruct(const Variable *self, char *dest, size_t cap, bool *outTruncated) {
     if (outTruncated)
         *outTruncated = false;
