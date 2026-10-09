@@ -125,12 +125,14 @@ static bool containsCaseInsensitive(const char *haystack, const char *needle) {
     return false;
 }
 
+// Compare two NUL-terminated names using ASCII case-insensitive matching.
 static bool equalsCaseInsensitive(const char *a, const char *b) {
     if (!a || !b)
         return false;
     return strcasecmp(a, b) == 0;
 }
 
+// Test whether haystack begins with needle using ASCII case-insensitive matching.
 static bool prefixCaseInsensitive(const char *haystack, const char *needle) {
     if (!haystack || !needle)
         return false;
@@ -148,12 +150,14 @@ int32_t Relational_getId(SymbolTable *scope, const char *name) {
     return SymbolTable_getId(scope, name);
 }
 
+// Copy a row's pooled name to out when the complete value fits.
 int Relational_getName(SymbolTable *scope, int32_t varId, char *out, size_t outCap) {
     if (!scope || !out)
         return -1;
     return SymbolTable_getName(scope, varId, out, outCap);
 }
 
+// Rename a registered row after validating both supplied names.
 bool Relational_setName(SymbolTable *scope, const char *oldName, const char *newName) {
     if (!scope || !oldName || !newName)
         return false;
@@ -177,6 +181,7 @@ void *Relational_getValueById(SymbolTable *scope, int32_t varId) {
     return (void*) SymbolTable_getPointer(scope, varId);
 }
 
+// Register a named pointer value with its class id, or rebind its existing row.
 bool Relational_setValue(SymbolTable *scope, const char *name, uint32_t classId, void *ptr) {
     if (!scope || !name)
         return false;
@@ -190,6 +195,7 @@ bool Relational_setValue(SymbolTable *scope, const char *name, uint32_t classId,
     return SymbolTable_instant(scope, name, classId, (uintptr_t) ptr) >= 0;
 }
 
+// Replace the pointer value held by an existing row id.
 bool Relational_setValueById(SymbolTable *scope, int32_t varId, void *ptr) {
     if (!scope || varId < 0 || (size_t) varId >= SymbolTable_getActiveCount(scope))
         return false;
@@ -206,6 +212,7 @@ const char *Relational_getString(SymbolTable *scope, const char *name) {
     return string_get((const uint8_t*) ptr);
 }
 
+// Allocate and bind a string value, releasing the replaced allocation on success.
 void Relational_setString(SymbolTable *scope, const char *name, const char *value) {
     if (!scope || !name || !value)
         return;
@@ -231,6 +238,7 @@ void *Relational_getFunction(SymbolTable *scope, const char *name) {
     return Relational_getValue(scope, name);
 }
 
+// Bind a named function pointer in the relational symbol scope.
 bool Relational_setFunction(SymbolTable *scope, const char *name, void *fn) {
     if (!scope || !name || !fn)
         return false;
@@ -325,6 +333,7 @@ static size_t searchOne(SymbolTable *scope, const char *query, int32_t *outIds, 
     return filled;
 }
 
+// Search one scope and write up to cap matching row ids in ranked order.
 size_t Relational_search(SymbolTable *scope, const char *query, int32_t *outIds, size_t cap) {
     if (!scope || !query || !outIds || cap == 0)
         return 0;
@@ -333,6 +342,7 @@ size_t Relational_search(SymbolTable *scope, const char *query, int32_t *outIds,
     return filled;
 }
 
+// Search global and local scopes, appending matching row ids up to cap.
 size_t Relational_searchAll(SymbolTable *global, SymbolTable *local, const char *query, int32_t *outIds, size_t cap) {
     if (!query || !outIds || cap == 0)
         return 0;

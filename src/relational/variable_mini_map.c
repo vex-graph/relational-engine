@@ -111,6 +111,7 @@ bool VariableMiniMap_init(VariableMiniMap *map) {
     return true;
 }
 
+// Release all allocated bucket lists and mark the mini map inactive.
 void VariableMiniMap_shutdown(VariableMiniMap *map) {
     if (!map)
         return;
@@ -135,6 +136,7 @@ VariableMiniMap *VariableMiniMap_0(void) {
     return map;
 }
 
+// Shut down and release an arena-allocated mini map.
 void VariableMiniMap_free(VariableMiniMap *map) {
     if (!map)
         return;
@@ -171,6 +173,7 @@ bool VariableMiniMap_add(VariableMiniMap *map, const char *name, uintptr_t point
     return true;
 }
 
+// Find name and optionally write its pointer value; clear output before lookup.
 bool VariableMiniMap_get(const VariableMiniMap *map, const char *name, uintptr_t *outPointer) {
     if (outPointer)
         *outPointer = 0u;
@@ -193,10 +196,12 @@ bool VariableMiniMap_get(const VariableMiniMap *map, const char *name, uintptr_t
     return true;
 }
 
+// Report whether name resolves to an entry in the mini map.
 bool VariableMiniMap_contains(const VariableMiniMap *map, const char *name) {
     return VariableMiniMap_get(map, name, nullptr);
 }
 
+// Visit each stored slot with the caller's context.
 void VariableMiniMap_forEach(VariableMiniMap *map, VariableMiniMapVisitFn fn, void *userdata) {
     if (!map || !(*map).active || !fn)
         return;
@@ -219,6 +224,7 @@ uint32_t VariableMiniMap_count(const VariableMiniMap *map) {
     return map ? (*map).count : 0u;
 }
 
+// Report whether the mini map has no entries; a null map is treated as empty.
 bool VariableMiniMap_isEmpty(const VariableMiniMap *map) {
     if (!map)
         return true;
@@ -243,6 +249,7 @@ void VariableMiniMap_toString(const VariableMiniMap *map, char *dest, size_t cap
     }
 }
 
+// Format the mini map's own fields into a bounded structure projection.
 void VariableMiniMap_toStringStruct(const VariableMiniMap *map, char *dest, size_t cap, bool *outTruncated) {
     if (outTruncated)
         *outTruncated = false;
