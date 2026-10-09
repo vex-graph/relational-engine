@@ -18,13 +18,47 @@ Read it first, then this file, `../../../tests/test-preferences.md`, current
 | R2 Responsibility Layout Law | Rust storage and C search | Module/layout owner checks; explicit unimplemented scope |
 | Stable Row and Variable Binding Law | Chunk/registry lifetimes and 32-byte ABI | Growth, layout, failure and C-client owner tests |
 | Fixed-Extent File Mapping Law | Rust file-backed byte views and lifetime | Unsafe external-file admission, checked ranges, borrow-negative and real file owners |
+| Physical File Reservation Law | Rust create-new byte files | Real allocated-block proof, no sparse fallback, failure preservation and retained-descriptor transfer |
+
+### Physical File Reservation Law
+
+Rust `io/preallocated_file.rs` owns `PreallocatedFile`: caller-sized nonzero,
+create-new regular byte storage. macOS F_PREALLOCATE/F_ALLOCATEALL and Linux kernel
+fallocate reserve disk space before success; EOF alone is never reservation.
+Allocated OS blocks must cover the requested extent. Unsupported hosts/filesystems
+and allocation failures reject without sparse fallback. Linux is unproven;
+Windows has no backend and rejects Unsupported.
+
+The host selects an existing trusted/stable parent (for example private Application
+Support/vexgraph app storage). No parent or implicit real-user artifact is created.
+Unix mode starts at 0600. Existing destinations/final symlinks reject unchanged.
+Creation-stage failure closes/removes the new artifact; cleanup failure reports
+both errors. This stable-parent contract is not a hostile-directory sandbox or
+TOCTOU defence; ancestor symlinks, same-user and privileged actors are not excluded.
+Drop/close retains successful files.
+
+`MappedFile::from_preallocated` consumes the original descriptor, never reopening
+the pathname; its unsafe external-file exclusion still applies. Mapping failure
+retains the reserved artifact for explicit recovery. References remain file
+identity plus offsets. No resize, format, checksums, transaction or persistence
+policy is added. APFS COW/snapshots/quotas/device errors may still require more
+space or fail on later edits; initial reservation is not an eternal space promise.
+Creation/sync/cleanup can block and stay off realtime/bounded-join teardown paths.
+
+File/path/length change only through creation/close/transfer, a scoped exception
+under the Conflict Triage Law and Single Class Per File Law (Java Law), not setters
+that forge reservation. Registered real/injected owners under
+`tests/relational-engine/rust/io` prove physical decimal 1 GB reservation, offset
+bit changes/reopen, rejection/cleanup/retry and descriptor provenance. OS mapping/
+sync/cleanup-error injection, Rust sanitizer, Linux/Windows and macOS14 runtime
+proof remain explicit gaps.
 
 ### Fixed-Extent File Mapping Law
 
 Rust `nio/mapped_file.rs` owns `MappedFile`, a fixed-extent existing regular-file
 mapping through memmap2. The owner retains the file until close/drop and unmaps
 before releasing it. Read-only and shared read/write modes are explicit; empty
-files are valid open owners without an OS mapping. No create/truncate/resize,
+files are valid open owners without an OS mapping. No implicit create/truncate/resize,
 C mapping ABI, internal dirty tracker, database format or typed reinterpretation
 is offered. The native Memory implementation remains unchanged.
 
