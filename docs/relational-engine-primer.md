@@ -6,15 +6,31 @@ the storage work. It is written so you can follow the whole system without readi
 every file, and so you can disagree with the architecture in an informed way.
 
 If something here contradicts the source, the source wins — this document is a
-map, not the territory. Every claim below is grounded in files you can open.
+map, not the territory. Source locations and the review boundary are listed below.
+
+## Start here: is it ready to ship?
+
+**There is no whole-engine production-readiness claim.** This repository contains
+native C infrastructure used by the ecosystem and a separate, developing Rust
+storage API. A working primitive, a passing owner test, and a finished storage
+product are three different milestones.
+
+The earlier description of the new handles as fully "generation-safe" was too
+strong. The current implementation has specific identity defects described below.
+A past green suite did not exercise those cases. This document update records a
+source review, not a fresh runtime certification.
+
+Also, RE is R2 infrastructure, not the R3 database. It need not become a database
+or acquire a WAL to be useful. Database transactions and recovery policy belong to
+Darkbase; RE must deliver the allocation and file primitives those policies need.
 
 ---
 
 ## 1. The one-sentence version
 
 The relational engine is the ecosystem's **memory and storage owner**: it holds
-values as raw bytes, gives every value a **name** and a **stable address**, and
-lets any part of the system ask "where is the thing called X right now?".
+values and offers stable-row storage plus optional **name-to-pointer bindings**.
+Not every allocation is named, and address stability has an owner lifetime.
 
 It sits at **R2** (the second tier of the R1–R5 stack). It does not own windows,
 GPUs, or UI. It owns: allocation, files, stable rows, named bindings, the shared
@@ -57,8 +73,9 @@ R2 is deliberately two cooperating owners:
   IO, stable row chunks, named bindings, native search, the type algebra.
 
 The rule of thumb: if it computes, it's Vexspoke; if it stores, it's the engine.
-They never include each other's private headers in a cycle — the engine is the
-floor, Vexspoke stands on it.
+They cooperate through public contracts: Vexspoke consumes engine IO/NIO and type
+algebra; the migrated native engine layer can borrow Vexspoke CPU-only helpers.
+The split is not a claim of a completely one-directional source dependency.
 
 ---
 
@@ -91,24 +108,28 @@ The rules:
 
 2. **`#[repr(C)]` for shared structs.** A Rust struct with `#[repr(C)]` has the
    exact same byte layout C would produce — same field order, same offsets, same
-   alignment. Only `#[repr(C)]` types may cross the seam. Never `String`, `Vec`,
-   trait objects, or Rust enums.
+   alignment for matching fields on the same target ABI. This does not recursively
+   make arbitrary field types C-compatible. Scalars and opaque pointers also cross;
+   Rust `String`, `Vec`, and data-carrying enums are not passed by value here.
 
 3. **Opaque owners.** The Rust side owns its data. C holds a `*mut Owner` it never
    looks inside, plus functions to create, use, and drop it. This is the
    "everything is a pointer" idea at the language boundary.
 
 4. **Status codes, not exceptions.** Rust panics must **never** unwind into C. Every
-   boundary function returns a small integer status (`0 = success`, `1 = invalid`,
+   fallible read/write operation returns a small integer status (`0 = success`, `1 = invalid`,
    `2 = allocation`, `3 = unknown id`, `4 = capacity`, …) and writes results into
-   caller-provided outputs.
+   caller-provided outputs. Creation returns a pointer and destruction returns
+   nothing. The current bridge has no general panic-to-status catcher; allocation
+   of the owner can abort on OOM. `extern "C"` is not exception recovery.
 
 5. **Caller-owned output, dest-last.** Data flows *out* through pointers the caller
    supplied. A string read takes `(owner, id, dest, capacity, out_length,
    out_truncated)` — the destination and flags come last.
 
-6. **No aliasing, no hidden allocation.** Inputs and outputs must not overlap. The
-   ABI says who allocates and who frees; C never frees Rust memory.
+6. **Explicit ownership and aliasing rules.** Follow each function's pointer and
+   exclusion contract. Creation, copying and string replacement can allocate.
+   C returns Rust-owned owners to their Rust destructor, never to C `free`.
 
 7. **Arbitrary pointers are not validated.** A non-null pointer must be live and
    aligned. "Everything is a pointer" means the engine trusts the pointer you hand
@@ -140,30 +161,35 @@ opaque handles, and status codes.
 | :--- | :--- |
 | `#[repr(C)]` structs | `String`, `Vec`, `Box` (by value) |
 | raw pointers (`*const T`, `*mut T`) | Rust references (`&T`, `&mut T`) |
-| fixed-width ints (`u32`, `u64`, `usize`) | trait objects, closures |
+| fixed-width ints (`u32`, `u64`), target-sized `usize` / C `size_t` | trait objects, closures |
 | function pointers with C signatures | Rust enums with data |
-| the 16-byte block header | Rust `_Atomic` assumed as C `_Atomic` |
+| explicitly agreed records such as `VariableSlot` | Rust atomics reinterpreted as C `_Atomic` |
 
 ---
 
-## 6. Why Rust is here (and why it "has to be")
+## 6. Why Rust is here (it does not have to be)
 
-Rust is not here for fashion; it is here because the storage core has exactly the
-failure modes Rust eliminates at compile time:
+The same design could be implemented in C. Rust is a tradeoff: more compiler help
+inside the storage owner, in exchange for a second language and a maintained ABI.
 
-- **No garbage collector, no hidden allocation.** Rust gives C-like control with
-  no runtime. That matches the ecosystem's "zero steady-state allocation" doctrine.
+- **No mandatory garbage collector.** Rust supports explicit allocation and
+  destruction. `Vec`, `Box` and `format!` still allocate; Rust does not automatically
+  make a path allocation-free or realtime-safe.
 - **Ownership and borrowing** catch use-after-free, double-free, and aliasing bugs
-  before the program runs — the bugs that turn a database into corruption.
+  in safe Rust before the program runs, provided unsafe implementations uphold
+  their contracts. The compiler cannot validate arbitrary pointers supplied by C.
 - **`MaybeUninit`, explicit `unsafe`, and `Drop`** let the engine build manual,
   bit-level storage while keeping the unsafe surface small and reviewable.
-- **Atomics are first-class**, so the lock-free pieces (atomic strings, snapshots)
-  are expressed directly rather than through a C macro layer.
+- **Atomics are first-class**, as they also are in C. Correct publication and
+  lifetime protocols still require design and concurrency tests.
 - **Type safety at the boundary**: the compiler proves the Rust side's invariants,
-  so C only has to honour the documented ABI contract.
+  but the unsafe bridge remains manually reviewed and tested.
 
-The cost is a real seam to maintain (the ABI rules above). The benefit is a storage
-core that is hard to corrupt.
+Costs include compiler/toolchain integration, explicit unsafe code, header drift,
+and restrictions on aliasing. C would simplify language integration but shift more
+lifetime enforcement into conventions, review and tests. Neither language proves
+identity correctness, crash durability or performance. The handle defects below
+are examples of logic errors that Rust can compile without complaint.
 
 ---
 
@@ -171,7 +197,7 @@ core that is hard to corrupt.
 
 ### 7.1 The 16-byte block header
 
-Every allocation the engine hands out is prefixed by a 16-byte header:
+The native C `Memory_*` allocation contract uses a 16-byte header:
 
 ```
 [ typeId: u64 ][ length: u32 ][ sugar: u32 ]   then the payload bytes
@@ -179,8 +205,9 @@ Every allocation the engine hands out is prefixed by a 16-byte header:
 
 The payload pointer sits 16 bytes after the header, so the header is found by one
 subtraction. `typeId` says what it is; `length` says how big; `sugar` is a
-recognizable marker that fails closed if the header is wrong. This is how a bare
-`void*` becomes self-describing — the runtime twin of the `;;WHAT("T")` annotation.
+recognizable marker. This is allocation metadata, not permission to inspect an
+arbitrary address. The separate Rust `Memory` and typed pools do **not** implement
+this header ABI; moving native C files into RE did not rewrite them in Rust.
 
 ### 7.2 Memory (`Memory`) — the byte store
 
@@ -191,8 +218,8 @@ readers never lock.
 ### 7.3 Chunks and pools — stable rows
 
 - **`Chunk<T>`** — a fixed-capacity block of typed rows that never moves.
-- **`ChunkedList<T>`** — a growable directory of chunks; rows keep their address
-  forever, so a pointer handed out once stays valid.
+- **`ChunkedList<T>`** — a growable directory of chunks; initialized rows retain
+  their addresses across growth, until owner destruction.
 - **`TypedChunk<T>`** — chunk + a packed occupancy bitmap, so freed slots are reused
   without moving survivors.
 - **`TypedPool<T>`** — a growable directory of `TypedChunk`s.
@@ -210,12 +237,25 @@ engine now has a generation-tagged **`Handle`**:
 Handle { index: usize, generation: u32 }
 ```
 
-Every slot carries a generation that is **bumped when the slot is freed**. A handle
-captures the generation at issue, and `get_handle` / `remove_handle` reject a handle
-whose generation no longer matches — a *stale* handle. Reusing a slot gives the new
-value a new generation, so the old handle stays dead. That is what makes a location
-into an identity. (Raw indices remain available for low-level use; the handle
-surface is the identity API.)
+Every slot carries a generation bumped on removal. Access compares the supplied
+generation to the slot's current generation and checks that the slot is occupied.
+This rejects ordinary remove/reuse cases, but **permanent stale rejection is not
+currently delivered**:
+
+- `Handle::zero()` is `(0, 0)`, and the first insertion into a fresh chunk issues
+  that same pair. The documented invalid sentinel can name a live value.
+- `TypedChunk::bump_generation` wraps back to one. Eventually a previously issued
+  generation can repeat; skipping zero does not prevent resurrection.
+- `TypedPool::release_empty_chunks` discards generation metadata. Recreating the
+  chunk starts at zero again, so an old handle can resolve to a new value.
+- Handles contain no owner identity. A handle from another pool can match; callers
+  must keep handles associated with their original owner.
+
+These findings come from `rust/src/nio/{handle,typed_chunk}.rs` and
+`rust/src/struct/typed_pool.rs`. The existing owner tests exercise ordinary reuse,
+but not sentinel rejection, generation exhaustion or stale handles after chunk
+recreation. Raw pointers are a separate obligation: handle checks do not make a
+previously escaped pointer safe after removal.
 
 ### 7.5 Variables — name → value
 
@@ -242,39 +282,40 @@ own class registry. This lets one allocator serve every type across the whole st
 ## 8. How it fits together (picture)
 
 ```
-        name  ->  value
-          |         |
-   VariableSlot   bytes (Memory block)
-          |         |
-   VariableRegistry  Chunk / TypedChunk / TypedPool
-          |         |
-     native C search  Handle { index, generation }  ->  identity
-          \        /
-        the relational engine (R2 storage)
-                 |
-     C ABI (repr(C) + extern "C" + status codes)
-                 |
-   C callers (Vexspoke CPU, R3 drivers, hosts)  <->  Rust storage core
+R2 relational engine -- separate contracts
+
+  Native C Memory_*: existing allocator + 16-byte header
+  Rust Memory: byte blocks + atomic values, separate opaque C ABI
+  Rust TypedPool: reusable rows + draft generation handles (Rust API)
+  Rust VariableRegistry: stable labels + borrowed value pointers
+       |
+       +-- calls native C name search over its slot rows
+
+A registry pointer may refer to caller-owned storage; it is not automatically
+connected to a Rust Memory block or TypedPool handle.
 ```
 
 ---
 
 ## 9. What is real vs planned (honest)
 
-**Real and proven (macOS arm64):** the migrated native C allocator and IO
-(`Memory`, `File`, `Cache`, `Log`, `VexHome`, `ProcessSpawn`, `WsClient`,
-clipboard); Rust byte/string + atomic string snapshots; `Chunk`/`ChunkedList`,
-`TypedChunk`/`TypedPool`; generation-tagged `Handle`; `VariableSlot` +
-`VariableRegistry` + native `re_name_search`; the shared `src/type` algebra.
+**Separate surfaces:** native C `Memory_*`, Rust `Memory`, reusable typed pools,
+and named bindings are not one interchangeable allocator. This review read the
+Rust memory bridge, registry and typed-handle implementations. Other native IO
+owners need their own current proof; this document does not certify the whole
+family or clipboard behavior.
 
-**Planned, not implemented:** mmap / `MappedFile` (the engine owns it; contract
-agreed, no code yet); buffered/async file IO and directory traversal; manifest-backed
-persistence; codecs (ZIP/7z, ASTC); GPU storage-transfer (`virtual/`); live
-Hotcwap reload integration.
+**Mapping status at this review:** no file matching `*mapped*` was found in the
+engine checkout. That inventory check is not a claim about another agent's work
+or every possible implementation name. MappedFile remains a dependency to verify
+before planning a consumer around it. Broader planned areas are described in the
+repo preferences; their implementation is not established by this document.
 
-**Unproven:** Windows execution; Rust sanitizer instrumentation; performance
-numbers; full concurrency/fault matrix. A pass on one platform is not proof on
-another.
+**Evidence boundary:** the checklist records earlier macOS owner runs, not a new
+run for this documentation update. C-client ASan/UBSan does not instrument Rust.
+Windows execution, Rust sanitizer instrumentation, full fault/concurrency coverage
+and measured performance are not established here. Neither a crate's name nor a
+green summary is a readiness decision.
 
 ---
 
@@ -283,18 +324,63 @@ another.
 Honest pressure points, so you can push on them:
 
 1. **The ABI is manual.** Every crossing function restates its contract in a comment.
-   A generated header (from the Rust `extern "C"` surface) would remove drift risk.
+   A generated header could reduce declaration drift; ownership and lifetime
+   contracts would still require review and C-client tests.
 2. **Handles are not yet the C ABI.** Identity currently lives in the Rust API; C
-   callers still see raw ids. Exposing handles over the C boundary is the next step.
+   callers use the separate memory/registry contracts. Repairing handle identity
+   comes before exposing that typed API to C.
 3. **Indices vs handles.** Keeping both raw indices and handles is pragmatic but
    leaves a footgun. If you want identity everywhere, the raw index API could be
    demoted to `pub(crate)`.
 4. **One header, one truth.** The 16-byte block header lives with the allocator; the
    type algebra lives in `src/type`. They are related but separate — worth deciding
    whether the header should carry more self-description.
-5. **No mmap yet.** The store is streamed through `File`. mmap is the big storage
-   upgrade (see `MappedFile`), and it is where the cold-vs-hot line matters most:
-   page faults are unbounded waits, so mapping is a *storage* tier, never a hot path.
+5. **Mapping is a choice, not a readiness badge.** mmap exposes file pages through
+   addresses; it does not supply transactions or crash recovery. Buffered IO may
+   be sufficient for a chosen workload. Page faults can block, so mapped storage
+   must not be assumed to satisfy a hot-path latency bound.
+
+### A practical roadmap, in dependency order
+
+1. **Repair typed identity.** Reserve a truly invalid sentinel, retain identity
+   history across backing release, and define non-resurrection on exhaustion.
+   Decide whether wrong-owner rejection is offered or caller responsibility.
+   Prove these cases alongside allocation failure and preserved live state.
+2. **Choose the first consumer and its contract.** State what it stores, how long
+   pointers live, who may mutate it, and what happens when capacity or allocation
+   fails. In-memory storage can be useful without any disk persistence.
+3. **Expose only the required C surface.** Define ownership, layout, status codes,
+   panic/OOM behavior and teardown, then exercise actual C callers. Generic Rust
+   pools do not automatically become a generic C allocator.
+4. **Add file-backed storage if that consumer needs it.** Prove file lifetime,
+   mapping or IO failures, bounds, flush behavior and teardown. Darkbase then owns
+   its database publication/recovery policy. A WAL is one possible strategy;
+   copy-on-write or atomic snapshot publication may suit a different contract.
+5. **Prove the intended deployment.** Run owner and integration tests, applicable
+   sanitizers, fault injection and representative benchmarks on supported targets.
+   macOS and Windows proof are separate; Linux is not an automatic release gate
+   imposed by this tutorial. Prove host residency/reload if the consumer uses it.
+
+Each step closes a specific promise. None authorizes a blanket "production-ready"
+label for unrelated parts of the repository.
+
+### The distinctions to keep in your head
+
+- **Address:** where bytes are now. Stable across growth does not mean immortal.
+- **Identity:** which object you mean, even when storage locations get reused.
+- **Name:** a lookup label. `VariableRegistry` stores a borrowed pointer; it does
+  not own, type-check or keep the pointed-to value alive.
+- **Persistence:** bytes survive process exit. A pointer's numeric address does
+  not become meaningful in the next process by being written to disk.
+- **Durability:** acknowledged changes survive the specified crash/power-loss
+  model. Successful writing or mapping alone does not establish this.
+- **Bytes versus interpretation:** byte storage avoids mandatory text conversion.
+  Integers still have byte order; records can contain padding and pointers.
+  A durable format must define what is stored and how references are rebuilt.
+
+For example, registering `health` against caller-owned bytes only makes those bytes
+findable. The caller must retain them and coordinate access. Saving that registry
+record verbatim would save a process address, not a portable health value.
 
 ---
 
@@ -315,7 +401,10 @@ Honest pressure points, so you can push on them:
 
 ---
 
-*Read boundary: this primer is grounded in the engine's README, preferences,
-`src/nio`, `src/io`, `src/type`, and the Rust `nio`/`struct`/`variable`/`ffi`
-modules as read this cycle. It is a map; when it and the source disagree, the
-source is right.*
+*Review boundary (2026-10-09): read the constitution and repo/test preferences,
+affected checklist rows, this primer, Rust `nio/{handle,typed_chunk,mem}.rs`,
+`struct/typed_pool.rs`, `variable/variable_registry.rs`, `ffi/memory.rs`, its C
+header, and the typed-chunk/pool owner tests. Inspected native `MemoryHeader`
+declarations and mapped-file filename inventory. This was not a complete native
+IO, atomic-string implementation, Darkbase or cross-platform audit. No runtime
+suite was rerun for this prose-only change.*
