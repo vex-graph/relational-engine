@@ -180,3 +180,8 @@ Migrated native IO/NIO owners live in `../../../tests/relational-engine/io` and
 `../../../tests/relational-engine/nio`, including the Rust byte/string handshake.
 Use registered runners and the Timestamped Test Checklist Law; current platform,
 sanitizer and migration gaps remain explicit, not production readiness.
+
+## Readiness Cross-Reference (Living Documentation Law)
+
+- Feature readiness matrix: [relational-engine](https://gist.github.com/vex-graph/6943f92acb931b25dad1073c46da6ce7#file-relational-engine-md).
+- Open blockers and deferred decisions: [ecosystem blockers Gist](https://gist.github.com/vex-graph/e921fa188eebbd0c68c4e59646109887).
