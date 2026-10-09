@@ -14,6 +14,11 @@ views through memmap2. Offset/count access, exclusive writes, explicit sync and
 borrow-negative owners pass macOS arm64 debug/release; unsafe admission requires preventing
 external file mutation/truncation for the lifetime. No resize or mapped C ABI.
 
+`io::PreallocatedFile` creates new physically reserved byte files without sparse
+fallback and transfers the retained descriptor into `MappedFile`. macOS arm64
+owners cover decimal 1 GB and persisted offset bit changes. Linux allocation source
+is unproven; Windows rejects Unsupported. APFS COW can still require more space.
+
 C includes `nio/relational_rows.h` (engine src + rust/include paths) and links
 the Cargo static library. See `include/relational_engine/row_pool.h` for exact
 geometry, statuses, borrow lifetime, serialization and teardown contracts. Storage
@@ -40,7 +45,7 @@ and stable row/binding code is implemented; other modules retain explicit planne
 
 - `src/nio`: memory, stable typed Chunk and fixed-extent `mapped_file.rs` mmap;
   mapping resize/C ABI and broader foreign-storage APIs remain planned.
-- `src/io`: file reads/writes, buffered readers/writers, gathering, FFF-style
+- `src/io`: implemented create-new physical preallocation; buffered readers/writers, gathering, FFF-style
   indexing/search and watching (planned). Manifest-backed persistent objects are
   proposed, not implemented; serialized identity must use IDs/offsets, not pointers.
 - `src/primitives`: implemented byte-backed string projection and atomic snapshots.
@@ -154,6 +159,46 @@ Rust sanitizer instrumentation and other-host execution remain gaps.
 ## Byte and atomic operations (existing API)
 
 ### Retained file bytes by offset
+
+#### Create and reserve before mapping
+
+```rust,no_run
+use relational_engine_scratchpad::{PreallocatedFile, MappedFile};
+const ONE_GIGABYTE: u64 = 1_000_000_000; // decimal GB, not 1 GiB
+let home = std::env::var_os("HOME").ok_or("HOME is unavailable")?;
+let parent = std::path::PathBuf::from(home)
+    .join("Library/Application Support/vexgraph/my-app");
+// Host must establish a private, trusted, stable parent; create_dir_all alone
+// is not a sandbox and does not defend against hostile ancestor symlinks.
+std::fs::create_dir_all(&parent)?;
+let owner = PreallocatedFile!(parent.join("storage.bin"), ONE_GIGABYTE)?;
+assert!(owner.allocated_bytes()? >= ONE_GIGABYTE);
+// SAFETY: host excludes external mutation/truncation/conflicting aliases until
+// close/drop. Retaining the original descriptor prevents path-reopen redirection.
+let mut file = unsafe { MappedFile::from_preallocated(owner)? };
+file.as_mut_slice()?[123] ^= 1; // flip a bit inside the reserved file
+file.sync()?;
+file.close(); // file remains on disk; no implicit sync or deletion
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+The caller chooses path and size; tests create no real Application Support file.
+Create-new rejects existing files/final symlinks unchanged; reopen existing storage
+through `MappedFile` instead. `PreallocatedFile!()` is closed. Parents must exist.
+macOS reserves with F_ALLOCATEALL then sets EOF; Linux uses kernel fallocate.
+Allocated OS blocks must cover the requested extent. Unsupported hosts/filesystems
+and insufficient space return inspectable errors, never sparse sizing. Creation-
+stage failure closes/removes only the new artifact under the stable-parent contract;
+cleanup failure reports both errors. Mapping failure after successful reservation
+leaves the on-disk file for caller recovery.
+
+This reserves disk space, not one GB of heap/RAM. APFS COW/snapshots/quotas/device
+errors can still require more space or fail on later edits. Bytes have no built-in
+record validation, checksums, transactions or crash-safe publication. Cold IO can
+block. Unix mode starts at 0600; same-user/privileged actors and hostile ancestors
+are not excluded. Real reservation and injected failures have separate owners;
+OS mapping/sync/cleanup-error injection, Rust instrumentation, Linux/Windows and
+macOS14 runtime proof remain gaps.
 
 ```rust,no_run
 use relational_engine_scratchpad::MappedFile;
