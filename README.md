@@ -17,6 +17,10 @@ does not change its R2 rank. This is a partial backend, not a finished engine.
   snapshots over a standalone C ABI; stable `Chunk`/`ChunkedList`,
   `TypedChunk`/`TypedPool`, and a 32-byte `repr(C)` `VariableSlot` +
   `VariableRegistry` with native C `re_name_search`.
+- Opt-in Rust aligned byte-row storage usable from C via `nio/relational_rows.h`:
+  RowPool copies/reads/writes/borrows rows, grows without moving survivors, and
+  rejects zero, stale and wrong-owner handles. Typed handles no longer wrap or
+  reset after backing release. Registered Rust/C clients cover this slice only.
 - The shared **type algebra** (`src/type/type.{h,c}`): the 64-bit id encoding,
   `PROJ_*`/`ARCH_*`, `Type_make`/`Type_arch`, and the parent-chain resolver
   (`Type_registerParents`, `Type_registerBareParents`, `Type_getParentClass`,
@@ -138,14 +142,33 @@ No b configuration selects the CMake adapter.
 
 ## Verification and known gaps
 
+The row-pool cycle ran `python3 tests/relational-engine/rust/run.py`: debug/release
+owners, intended compile failures, and real C row-pool clients with assertions,
+`-Wall -Wextra -Werror` and C-side ASan/UBSan. Rust ASan was attempted separately
+but skips: the installed Apple runtime lacks Rust's ASan v8 version symbol.
+The installed Rust standard library also reports macOS 27 deployment metadata;
+macOS 14 runtime compatibility is unproved despite selecting a 14.0 build target.
+No Windows, performance or downstream application migration proof is implied.
+
+### C consumers of Rust storage
+
+Include `nio/relational_rows.h` with both engine `src` and `rust/include` on the
+include path; link Cargo's `librelational_engine_scratchpad.a`. The public header
+documents row geometry, status codes, borrow lifetime and caller serialization.
+R1 owns the pool and drops it only after consumers detach. Byte rows contain no
+Rust destructor; embedded C pointers stay caller-owned. Native `Memory_*` remains
+unchanged. `./tools/b build relational_engine` still builds the native C target,
+not this opt-in Rust library. The real usage example is in the
+[primer](docs/relational-engine-primer.md#using-rust-storage-from-c--no-consumer-rewrite).
+
 From the workspace root, run `python3 tests/relational-engine/scaffold_test.py`
 for layout, mixed-ignore behavior,
 CMake metadata generation and a warnings-denied Cargo scaffold check.
 These are tooling checks, not behavioral proof for the imported C classes.
 The separate Rust suite exercises byte ownership, atomic byte/string publication
 and a separate engine extern handshake through the standalone C ABI. The stable
-row slice has eleven registered Rust owner targets (sixteen test cases in each
-debug/release run), real C registry/native-search clients, C-client ASan/UBSan,
+row slice has registered per-class Rust owner targets in each
+debug/release run, real C row-pool/registry/native-search clients, C-client ASan/UBSan,
 exact invalid-span diagnostics and intended arity/type/borrow compile failures.
 See the current checklist for executed commands and hashes, not a remembered
 green. The registry C API exports `re_variables_new/drop/add/find/slot/set_pointer`
