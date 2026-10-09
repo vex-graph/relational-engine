@@ -17,6 +17,44 @@ Read it first, then this file, `../../../tests/test-preferences.md`, current
 | CamelCase Rust Constructor Macro Law | Rust construction spelling | CamelCase!() macros; snake_case ordinary operations |
 | R2 Responsibility Layout Law | Rust storage and C search | Module/layout owner checks; explicit unimplemented scope |
 | Stable Row and Variable Binding Law | Chunk/registry lifetimes and 32-byte ABI | Growth, layout, failure and C-client owner tests |
+| Fixed-Extent File Mapping Law | Rust file-backed byte views and lifetime | Unsafe external-file admission, checked ranges, borrow-negative and real file owners |
+
+### Fixed-Extent File Mapping Law
+
+Rust `nio/mapped_file.rs` owns `MappedFile`, a fixed-extent existing regular-file
+mapping through memmap2. The owner retains the file until close/drop and unmaps
+before releasing it. Read-only and shared read/write modes are explicit; empty
+files are valid open owners without an OS mapping. No create/truncate/resize,
+C mapping ABI, internal dirty tracker, database format or typed reinterpretation
+is offered. The native Memory implementation remains unchanged.
+
+Opening a file-backed mapping is unsafe admission: the caller excludes external
+mutation/truncation and aliases violating writable exclusivity for the complete
+mapping lifetime. Rust borrowing alone cannot constrain another process, and
+advisory locks/permissions do not make hostile truncation safe. Paths follow OS
+open semantics, including symlinks; this is not sandbox confinement. Untrusted
+mutable files require a different snapshot/copy or enforced ownership boundary.
+
+Offset/count reads and writes validate bounds and arithmetic before access;
+rejection preserves bytes. Views borrow the owner; close/write/drop while a live
+incompatible Rust view is used fail compilation. Application owners may retain
+the mapping until shutdown. Durable references use file identity plus offsets,
+never process addresses; format/type/record validation belongs to the consumer.
+
+Flush requests mapped-page writeback; sync then requests file synchronization.
+Both expose OS errors through MappingError/Result and neither claims atomic
+publication, power-loss transactions or rollback of prior writes. Close does not
+implicitly sync. memmap2/std Drop does not expose unmap/descriptor-close failures.
+Mapping/page faults/open/flush/sync/cleanup have no hard latency bound and remain
+off realtime and bounded-join teardown paths. Geometry/mode/backing mutate only
+through admission/access/close, not arbitrary setters, a scoped managed exception
+under the Conflict Triage Law and Single Class Per File Law (Java Law).
+
+Registered owners are `mapped_file_test.rs` and `mapping_error_test.rs` under
+`../../../tests/relational-engine/rust/nio`, plus intended unsafe/type/arity/borrow
+compiler rejection cases in the main runner. OS mapping/flush/sync-failure injection,
+huge-file admission, Rust sanitizer instrumentation, Windows and macOS 14 runtime proof remain
+explicit gaps, not inferred from a successful local round trip.
 
 ### Stable Row and Variable Binding Law
 
@@ -74,8 +112,8 @@ are preserved, not rewritten into Rust. Existing Rust typed pools remain a
 distinct API, not a silent allocator substitution. Native code may borrow
 Vexspoke CPU-only spin/crypto/type/annotation contracts; never downstream or
 host headers, duplicate memory implementations or a recursive target graph.
-Rust `nio/` owns buffers, heap/foreign storage and future file-backed mappings
-(`MappedFile`/mmap); `io/` owns file reads/writes, buffered readers/writers,
+Rust `nio/` owns buffers, heap/foreign storage and fixed-extent file-backed mappings
+(`MappedFile`/mmap); `io/` owns future buffered readers/writers,
 gathering, indexing and watching. Manifest-backed persistence remains proposed;
 no concurrent file-commit/durability contract is implemented or implied.
 FFF means the file-search toolkit at https://github.com/dmtrKovalenko/fff,
