@@ -120,28 +120,9 @@ whole-record atomicity or Vexspoke container migration.
 See `rust/README.md` and run `python3 tests/relational-engine/rust/run.py`
 from the workspace root for the owner/ABI suite.
 
-## CLion: CMake is IDE metadata only
+## Build
 
-Open the repository root as a CMake project. `CMakeLists.txt` gives CLion C23
-source targets, include paths and compiler flags for navigation, diagnostics
-and inlay hints. Targets are excluded from the default build. This file is
-not the release build or a new build-system dependency; no Cargo invocation,
-dependency downloads, linking or application runner is wired into it.
-
-An optional `VEXSPOKE_SOURCE_DIR` points to a local Vexspoke `src` checkout
-for remaining header references. Missing headers remain real IDE errors;
-no fake declarations are generated. `src/nio/mem.h` is now present locally.
-Production IDE targets are `engine_nio`, `engine_io` (including ObjC ARC clipboard)
-and `engine_search`; `reference_relational`/`reference_reflection` are reference-only.
-Native IO/NIO borrows the supplied Vexspoke CPU-only include
-directory. Cargo compiles native name search for Rust spans; the workspace build
-compiles migrated native IO/NIO. Metadata compilation is not runtime proof.
-
-Rust analysis requires CLion's Rust support and `rust/Cargo.toml`; CMake
-does not provide Rust semantic analysis. Open/attach that Cargo package if
-the IDE does not discover it automatically. IDE appearance is user-verified.
-
-The actual build entry remains [b](https://github.com/vex-graph/b); with a
+The build entry is [b](https://github.com/vex-graph/b); with a
 standalone b installation:
 
 ```sh
@@ -151,7 +132,8 @@ b build cargo rust
 That builds only the Rust learning backend. The integrated production native
 entry is `./tools/b build relational_engine` from the workspace root, with the
 same engine dependency supplied to ordinary Vexspoke/Graphvex/Darling builds.
-No b configuration selects the CMake adapter.
+Rust editor analysis uses `rust/Cargo.toml`; workspace editor setup lives in
+the workspace README.
 
 ## Verification and known gaps
 
@@ -227,7 +209,7 @@ not this opt-in Rust library. The real usage example is in the
 
 From the workspace root, run `python3 tests/relational-engine/scaffold_test.py`
 for layout, mixed-ignore behavior,
-CMake metadata generation and a warnings-denied Cargo scaffold check.
+workspace code-model coverage and a warnings-denied Cargo scaffold check.
 These are tooling checks, not behavioral proof for the imported C classes.
 The separate Rust suite exercises byte ownership, atomic byte/string publication
 and a separate engine extern handshake through the standalone C ABI. The stable
