@@ -55,7 +55,11 @@ bool Memory_init(size_t totalBytes);
 // Returns the aligned payload pointer, or nullptr on failure/exhaustion. Backing
 // capacity is selected at construction, a physical resource bound, not a dynamic
 // entity ceiling. No untracked heap fallback; choose a larger owner when needed.
-// Admission rejection is silent; existing blocks and allocation cursor survive.
+// Exhaustion is LOUD but bounded (the Exhaustion Loudness Law): the FIRST
+// rejection of an epoch emits its THROW diagnostic naming the request and the
+// arena's used/available bytes; later rejections only increment a counter, so a
+// failing frame loop cannot flood stderr. The return contract is unchanged
+// (nullptr) and existing blocks and the allocation cursor survive.
 void *Memory_alloc(uint64_t typeId, size_t numBytes);
 
 // Grow/shrink a block, preserving contents and type. Returns the new payload
@@ -67,6 +71,7 @@ void Memory_free(void *userPtr);
 
 // Reset slab lists and clear used bump storage, invalidating existing headers.
 // Work scales with slab capacity plus used bump bytes; excludes active users.
+// Also starts a fresh exhaustion epoch (counter and one-report latch reset).
 void Memory_freeAll(void);
 
 // Metadata accessors: cost a single pointer subtract in O(1) without locks.
@@ -113,6 +118,13 @@ size_t MemoryArena_findAll(MemoryArena *a, uint64_t typeId, void **outArray, siz
 size_t MemoryArena_activeBytes(MemoryArena *a);
 size_t MemoryArena_capacity(MemoryArena *a);
 
+// --- Exhaustion observability (the Exhaustion Loudness Law) ---
+// Every rejection counted since the arena's last init/freeAll; the diagnostic
+// itself fires once per epoch. A test/tool asserts the count deterministically
+// instead of parsing stderr.
+uint64_t Memory_exhaustionCount(void);
+uint64_t MemoryArena_exhaustionCount(const MemoryArena *a);
+
 // Lifetime verification classification
 typedef enum MemoryLifetime {
     MEMORY_LIFETIME_UNKNOWN = 0,
@@ -121,14 +133,17 @@ typedef enum MemoryLifetime {
 } MemoryLifetime;
 
 // Transient (Frame / Scratchpad) bump-only arena lifecycle
-// Overflow/layout/capacity rejection is silent and preserves existing state.
+// Overflow/layout/capacity rejection is LOUD but bounded: the first rejection
+// of an epoch reports via THROW, later ones only count (Transient_exhaustionCount).
 // Transient payload lengths must fit uint32_t; initialization capacity must round
-// to 16-byte alignment without overflowing size_t. Reset excludes active users.
+// to 16-byte alignment without overflowing size_t. Reset excludes active users
+// and starts a fresh exhaustion epoch.
 bool Memory_initTransient(size_t capacity);
 void *Transient_alloc(uint64_t typeId, size_t numBytes);
 void Transient_reset(void);
 bool Transient_contains(const void *ptr);
 uint32_t Transient_getGeneration(void);
+uint64_t Transient_exhaustionCount(void);
 #if defined(DEBUG_BORROW_CHECK)
 const uint8_t *Transient_getBuffer(void);
 #endif

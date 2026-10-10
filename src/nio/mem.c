@@ -5,6 +5,7 @@
 #include "annotation/overview.h"
 #include "annotation/intention.h"
 #include "atomic/spin.h"
+#include "exception/throw.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -105,8 +106,9 @@
  *   - MemoryArena_capacity(a)
  *
  * Transient Functions (Dynamic Lifetime Verifier):
- *   Scratch payload lengths fit uint32_t; rounding/capacity overflow rejects
- *   silently without changing headers, generation or bump cursor. Initialization
+ *   Scratch payload lengths fit uint32_t; an oversized or capacity-overflowing
+ *   request is refused LOUDLY once per epoch (THROW) and counted thereafter,
+ *   without changing headers, generation or bump cursor. Initialization
  *   capacity must round to 16-byte alignment without size_t overflow.
  *   - Memory_initTransient(capacity)
  *   - Transient_alloc(typeId, numBytes)
@@ -118,12 +120,14 @@
  *
  * CAPACITY / OWNERSHIP:
  *   Construction owns all backing; alloc never escapes into libc on exhaustion.
- *   Exhaustion returns nullptr silently without changing existing blocks.
- *   Slab slots recycle individually; bump blocks invalidate individually and
- *   reclaim space only at freeAll. Enumeration includes both storage regions.
- *   Registry mutation/reset/destroy/metadata enumeration require exclusion;
- *   initialized disjoint alloc/free may contend on class/bump locks. Raw pointers
- *   have no generations: reuse can alias an old address. Not stale-handle safety.
+ *   Exhaustion returns nullptr and is reported once per epoch (THROW) with the
+ *   request size, then counted (Memory_exhaustionCount / MemoryArena_exhaustionCount)
+ *   without changing existing blocks. Slab slots recycle individually; bump blocks
+ *   invalidate individually and reclaim space only at freeAll. Enumeration includes
+ *   both storage regions. Registry mutation/reset/destroy/metadata enumeration
+ *   require exclusion; initialized disjoint alloc/free may contend on class/bump
+ *   locks. Raw pointers have no generations: reuse can alias an old address. Not
+ *   stale-handle safety.
  * ============================================================================
  */
 
@@ -176,6 +180,11 @@ struct MemoryArena {
     SpinLock bumpLock;
     SpinLock initLock;
     bool live;
+    // Exhaustion is LOUD but bounded: the first rejection in an epoch reports
+    // through THROW and later ones only count, so a failing frame loop cannot
+    // flood stderr. Both reset on init/freeAll (a fresh epoch).
+    uint64_t exhaustionCount;   // rejected requests since the last reset
+    bool exhaustionReported;    // the epoch's one diagnostic was emitted
 };
 
 static uint32_t s_slabSizes[SLAB_COUNT] = { 64, 128, 256, 512, 1024, 2048, 4096 };
@@ -226,6 +235,10 @@ typedef struct TransientArena {
     uint32_t generation;
     SpinLock lock;
     bool live;
+    // Same bounded loudness as the permanent arenas: report the first scratch
+    // rejection of an epoch, count the rest.
+    uint64_t exhaustionCount;
+    bool exhaustionReported;
 } TransientArena;
 
 static TransientArena s_transient = {
@@ -307,15 +320,25 @@ static bool arena_init(MemoryArena *a, size_t totalBytes) {
     (*a).bumpCapacity = left;
     (*a).bumpOffset = 0;
     (*a).live = true;
+    (*a).exhaustionCount = 0;
+    (*a).exhaustionReported = false;
     return true;
 }
 
-/** Allocate from owner storage only; exhaustion preserves state and rejects. */
+/** Allocate from owner storage only; exhaustion is reported loudly, once per epoch. */
+;;INTENTION("exhaustion is a cold, terminal detection reached from a hot allocator: it reports once per epoch (never per call) and counts the rest, so the Cold-Strict hot-minimal contract holds for the success path while a failure can never be silent -- the Exhaustion Loudness Law's hot-path clause under the Conflict Triage Law")
 static void *arena_alloc(MemoryArena *a, uint64_t typeId, size_t numBytes) {
     if (!a || !(*a).live)
         return nullptr;
-    if (numBytes > UINT32_MAX)
+    if (numBytes > UINT32_MAX) {
+        // A size the header can never describe is a refusal, not a silent no-op.
+        (*a).exhaustionCount++;
+        if (!(*a).exhaustionReported) {
+            (*a).exhaustionReported = true;
+            THROW("memory: request %zu exceeds the uint32 header limit", numBytes);
+        }
         return nullptr;
+    }
 
     int s_idx = find_slab(numBytes);
     if (s_idx >= 0) {
@@ -355,6 +378,14 @@ static void *arena_alloc(MemoryArena *a, uint64_t typeId, size_t numBytes) {
     }
     SpinLock_unlock(&(*a).bumpLock);
 
+    // The arena is exhausted: no slab slot and no bump room. Report once with
+    // the quantity needed, then count every further rejection.
+    (*a).exhaustionCount++;
+    if (!(*a).exhaustionReported) {
+        (*a).exhaustionReported = true;
+        THROW("memory: arena exhausted, request %zu bytes (bump used %zu/%zu)",
+              numBytes, (*a).bumpOffset, (*a).bumpCapacity);
+    }
     return nullptr;
 }
 
@@ -441,6 +472,9 @@ static void arena_freeAll(MemoryArena *a) {
     memset((*a).bumpArena, 0, (*a).bumpOffset);
     (*a).bumpOffset = 0;
     SpinLock_unlock(&(*a).bumpLock);
+    // A reset starts a fresh exhaustion epoch: the next rejection reports again.
+    (*a).exhaustionCount = 0;
+    (*a).exhaustionReported = false;
 }
 
 // Free-routing: headers carry no arena tag (ABI-stable by design), so the
@@ -625,6 +659,8 @@ bool Memory_initTransient(size_t capacity) {
     s_transient.bumpOffset = 0;
     s_transient.generation = 1;
     s_transient.live = true;
+    s_transient.exhaustionCount = 0;
+    s_transient.exhaustionReported = false;
     SpinLock_unlock(&s_transient.lock);
     return true;
 }
@@ -637,10 +673,16 @@ static inline void ensure_transient_initialized(void) {
 
 /** Allocate an aligned transient payload, rejecting length, arithmetic, and capacity overflow. */
 void *Transient_alloc(uint64_t typeId, size_t numBytes) {
-    // The header length is uint32_t. Reject before rounding or lazy allocation;
-    // scratch admission is silent on this hot path, like other capacity rejects.
-    if (numBytes > UINT32_MAX || numBytes > SIZE_MAX - sizeof(MemoryHeader) - 15u)
+    // The header length is uint32_t. An oversized request is a refusal and is
+    // reported (once per epoch) rather than dropped; the guard stays cheap.
+    if (numBytes > UINT32_MAX || numBytes > SIZE_MAX - sizeof(MemoryHeader) - 15u) {
+        s_transient.exhaustionCount++;
+        if (!s_transient.exhaustionReported) {
+            s_transient.exhaustionReported = true;
+            THROW("transient: request %zu exceeds the scratch length limit", numBytes);
+        }
         return nullptr;
+    }
     ensure_transient_initialized();
     if (!s_transient.live)
         return nullptr;
@@ -650,7 +692,15 @@ void *Transient_alloc(uint64_t typeId, size_t numBytes) {
 
     SpinLock_lock(&s_transient.lock);
     if (total > s_transient.capacity - s_transient.bumpOffset) {
+        size_t used = s_transient.bumpOffset;
+        size_t capacity = s_transient.capacity;
         SpinLock_unlock(&s_transient.lock);
+        s_transient.exhaustionCount++;
+        if (!s_transient.exhaustionReported) {
+            s_transient.exhaustionReported = true;
+            THROW("transient: scratch exhausted, request %zu bytes (used %zu/%zu)",
+                  numBytes, used, capacity);
+        }
         return nullptr;
     }
 
@@ -677,6 +727,8 @@ void Transient_reset(void) {
 #endif
     s_transient.bumpOffset = 0;
     s_transient.generation++;
+    s_transient.exhaustionCount = 0;
+    s_transient.exhaustionReported = false;
     SpinLock_unlock(&s_transient.lock);
 
 #if defined(DEBUG_BORROW_CHECK)
@@ -697,6 +749,11 @@ bool Transient_contains(const void *ptr) {
 /** Return the current transient allocation generation. */
 uint32_t Transient_getGeneration(void) {
     return s_transient.generation;
+}
+
+/** Return the number of rejected scratch requests since the last reset. */
+uint64_t Transient_exhaustionCount(void) {
+    return s_transient.exhaustionCount;
 }
 
 #if defined(DEBUG_BORROW_CHECK)
@@ -870,4 +927,14 @@ size_t MemoryArena_capacity(MemoryArena *a) {
     if (!a)
         return 0;
     return (*a).masterCapacity;
+}
+
+/** Return the number of rejected requests since the arena's last init/freeAll. */
+uint64_t MemoryArena_exhaustionCount(const MemoryArena *a) {
+    return a ? (*a).exhaustionCount : 0;
+}
+
+/** Return the default arena's rejected-request count since the last freeAll. */
+uint64_t Memory_exhaustionCount(void) {
+    return s_default.live ? s_default.exhaustionCount : 0;
 }
