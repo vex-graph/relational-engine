@@ -757,6 +757,7 @@ uint64_t Transient_exhaustionCount(void) {
 }
 
 #if defined(DEBUG_BORROW_CHECK)
+;;DEBUG
 /** Return the transient arena backing buffer for debug-only borrow diagnostics. */
 const uint8_t *Transient_getBuffer(void) {
     return s_transient.buffer;

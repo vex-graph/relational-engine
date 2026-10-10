@@ -105,9 +105,9 @@ files remain comparison material; migrated native IO/NIO is production code.
   C/Rust ABI and the data model.
 - `rust/annotations` + `rust/src/annotation.rs`: a zero-dependency proc-macro
   crate providing the Rust form of the C `;;` annotation markers (`#[overview]`,
-  `#[intention("...")]`, `#[what("T")]`, …); `annotation.rs` re-exports them so
-  engine files use `crate::annotation::*`. Attributes are compile-time passthroughs
-  (the Two-Semicolon Annotation Style Law).
+  `#[intention("...")]`, `#[what("T")]`, `#[checker]`, `#[hotcode]`, `#[debug]`, …);
+  `annotation.rs` re-exports them so engine files use `crate::annotation::*`.
+  Attributes are compile-time passthroughs (the Two-Semicolon Annotation Style Law).
 - Owner and tooling tests live in the independent workspace `../../../tests/relational-engine`.
 
 The imported C reference retains Vexspoke's Boost Software License in

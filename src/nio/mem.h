@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "annotation/debug.h"
+
 // Relational Engine owns this production ForeignMemory API and its implementation.
 // Canonical nio/mem.h includes preserve the existing C ABI for every consumer.
 //
@@ -145,6 +147,7 @@ bool Transient_contains(const void *ptr);
 uint32_t Transient_getGeneration(void);
 uint64_t Transient_exhaustionCount(void);
 #if defined(DEBUG_BORROW_CHECK)
+;;DEBUG
 const uint8_t *Transient_getBuffer(void);
 #endif
 MemoryLifetime Memory_getLifetime(const void *ptr);
