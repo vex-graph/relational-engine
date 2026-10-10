@@ -65,6 +65,7 @@ no_arg_marker! {
     incomplete => "incomplete",
     checker => "checker",
     hotcode => "hotcode",
+    debug => "debug",
 }
 
 macro_rules! string_marker {
