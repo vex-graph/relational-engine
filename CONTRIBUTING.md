@@ -10,8 +10,7 @@ reference code until its replacement has an explicit contract and proof.
 
 Imported C comparison files and the partial Rust/native-search implementation
 are not two complete production engines.
-CMake is CLion-only metadata. Use b/native compiler tooling for actual work;
-do not make the runtime depend on CMake or compile out real diagnostics.
+Use b/native compiler tooling for actual work; do not compile out real diagnostics.
 
 Read [relational-engine-preferences.md](relational-engine-preferences.md) for
 the resident storage, atomic boundary and one-type-per-file contracts.
